@@ -3,7 +3,13 @@
 
 # 项目简介
 nsh-match-analytics 是一个用于管理和分析 **《逆水寒》黄金服端游** 帮会联赛数据的 Web 系统。系统支持导入游戏内导出的联赛 csv 数据，提供数据库管理、数据统计以及网页可视化的展示功能，并附带诸如帮会成员历史数据查询、联赛团队配置等实用工具。
-![match table](docs/images/match_table.png)
+<p>
+<img src="docs/images/match_table.png" width="19%">
+<img src="docs/images/match_analytic.png" width="19%">
+<img src="docs/images/attendance_table.png" width="19%">
+<img src="docs/images/player_history_table.png" width="19%">
+<img src="docs/images/match_config.png" width="19%">
+</p>
 主要功能包括：
 - “联赛数据”模块可查看每一场联赛所有参与者的战斗数据，包括本帮帮众与对方帮众，显示联赛胜负与额外备注信息，并提供一个简易的数据分析引擎，用于联赛数据分析。。联赛数据通过交互式表格的方式呈现。交互式表格支持如下功能：
   - 可手动勾选控制表格列是否显示；

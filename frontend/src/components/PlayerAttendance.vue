@@ -5,21 +5,21 @@
       <label>
         开始日期：
         <input
-          type="date"
           v-model="startDate"
+          type="date"
           :min="earliest"
           :max="today"
-        />
+        >
       </label>
 
       <label>
         结束日期：
         <input
-          type="date"
           v-model="endDate"
+          type="date"
           :min="startDate"
           :max="today"
-        />
+        >
       </label>
 
       <button class="btn-refresh" @click="loadAttendance">刷新</button>
@@ -88,8 +88,9 @@
         <tbody>
           <tr v-for="(row, idx) in sortedRows" :key="row.player_id">
             <td>{{ idx + 1 }}</td>
-            <td @click="gotoHistory(row.player_id)" style="cursor:pointer">{{ row.player_id }}</td>
-            <td @click="gotoHistory(row.player_id)" v-html="row.nicknames.replace(/\n/g, '<br>')" style="cursor:pointer"></td>
+            <td style="cursor:pointer" @click="gotoHistory(row.player_id)">{{ row.player_id }}</td>
+            <!-- eslint-disable-next-line vue/no-v-html -->
+            <td style="cursor:pointer" @click="gotoHistory(row.player_id)" v-html="row.nicknames.replace(/\n/g, '<br>')" />
             <td>{{ row.total_combat_power }}</td>
             <td>
               {{ row.attended }}&nbsp;/&nbsp;{{ row.total_matches }}

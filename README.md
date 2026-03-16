@@ -112,7 +112,7 @@ python app.py
 ```
 pip install gunicorn
 # 测试运行
-venv/bin/gunicorn --workers 4 --bind 127.0.0.1:5000 app:app
+venv/bin/gunicorn --workers 4 --bind 127.0.0.1:10290 app:app
 ```
 
 ### 2.4 使用 systemd 管理服务 

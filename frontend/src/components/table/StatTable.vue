@@ -7,9 +7,9 @@
           <template v-for="col in columns" :key="col.key">
             <th
               v-if="isVisible(col.key)"
+              :class="{ 'ctx-highlight': isColHighlighted(col.key) }"
               @click="col.sortable !== false && emit('sort', col.key)"
               @contextmenu.prevent="emit('header-context', col.key)"
-              :class="{ 'ctx-highlight': isColHighlighted(col.key) }"
             >
               {{ col.label }}
               <span v-if="sortKey === col.key">{{ sortAsc ? '▲' : '▼' }}</span>
@@ -20,18 +20,18 @@
       <tbody>
         <tr v-for="(row, i) in rows" :key="row[rowKey] ?? i">
           <td
-            @contextmenu.prevent="emit('row-context', row[rowKey])"
             :class="{ 'ctx-highlight': isRowHighlighted(row[rowKey]) }"
+            @contextmenu.prevent="emit('row-context', row[rowKey])"
           >
             {{ i + 1 }}
           </td>
           <template v-for="col in columns" :key="col.key">
             <td
               v-if="isVisible(col.key)"
-              @click="onCellClick(row, col)"
-              @contextmenu.prevent="emit('cell-context', { rowId: row[rowKey], colKey: col.key })"
               :class="cellClasses(row, col)"
               :style="cellStyle(row, col)"
+              @click="onCellClick(row, col)"
+              @contextmenu.prevent="emit('cell-context', { rowId: row[rowKey], colKey: col.key })"
             >
               {{ row[col.key] }}
             </td>

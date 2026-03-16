@@ -4,10 +4,9 @@
 #
 # Created by mzq on 2025/5/26
 #
-from flask import Flask, jsonify, send_from_directory, request
+from flask import Flask, jsonify, request
 from flask_cors import CORS
 import sqlite3
-import os, re
 from datetime import datetime
 from config import Config
 

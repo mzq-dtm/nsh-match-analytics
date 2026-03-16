@@ -77,10 +77,7 @@ def main():
         print(f"数据库错误：{e}")
         sys.exit(1)
     finally:
-        try:
-            conn.close()
-        except:
-            pass
+        conn.close()
 
 
 if __name__ == "__main__":

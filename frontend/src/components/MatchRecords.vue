@@ -11,21 +11,21 @@
         </select>
       </label>
 
-      <span class="outcome-text" v-if="selectedMatch">{{ matchOutcomeText }}</span>
+      <span v-if="selectedMatch" class="outcome-text">{{ matchOutcomeText }}</span>
 
-      <button class="toggle-side-btn" @click="toggleViewSide" :disabled="!selectedMatch">
+      <button class="toggle-side-btn" :disabled="!selectedMatch" @click="toggleViewSide">
         {{ isAwayView ? '显示本帮数据' : '显示对手数据' }}
       </button>
 
-      <button class="analysis-btn" @click="openAnalysisModal" :disabled="!selectedMatch">
+      <button class="analysis-btn" :disabled="!selectedMatch" @click="openAnalysisModal">
         自动分析
       </button>
 
-      <button class="clear-btn" @click="clearHighlights" :disabled="!hasHighlights">
+      <button class="clear-btn" :disabled="!hasHighlights" @click="clearHighlights">
         清除标记
       </button>
 
-      <span class="match-note" v-if="selectedMatch && matchNote">
+      <span v-if="selectedMatch && matchNote" class="match-note">
         备注：{{ matchNote }}
       </span>
     </div>
@@ -136,16 +136,16 @@
           </button>
         </div>
 
-        <div class="column-controls" v-if="!isAwayView">
+        <div v-if="!isAwayView" class="column-controls">
           <label v-for="col in columnsDef" :key="col.key">
-            <input type="checkbox" v-model="visibleColumns[col.key]" />
+            <input v-model="visibleColumns[col.key]" type="checkbox">
             {{ col.label }}
           </label>
         </div>
 
-        <div class="column-controls" v-else>
+        <div v-else class="column-controls">
           <label v-for="col in awayColumnsDefForControl" :key="col.key">
-            <input type="checkbox" v-model="awayVisibleColumns[col.key]" />
+            <input v-model="awayVisibleColumns[col.key]" type="checkbox">
             {{ col.label }}
           </label>
         </div>
@@ -174,15 +174,15 @@
     </div>
 
     <div
-        v-if="showAnalysisModal"
-        ref="analysisModalOverlayRef"
-        class="modal-overlay"
-        tabindex="0"
-        @click.self="closeAnalysisModal"
-        @keydown.esc="closeAnalysisModal"
+      v-if="showAnalysisModal"
+      ref="analysisModalOverlayRef"
+      class="modal-overlay"
+      tabindex="0"
+      @click.self="closeAnalysisModal"
+      @keydown.esc="closeAnalysisModal"
     >
       <div class="modal analysis-modal">
-        <button class="modal-close" @click="closeAnalysisModal" aria-label="关闭">×</button>
+        <button class="modal-close" aria-label="关闭" @click="closeAnalysisModal">×</button>
         <header class="analysis-header">
           <h3>{{ selectedMatchLabel }} 自动分析结果</h3>
           <p class="analysis-tip">
@@ -200,32 +200,32 @@
         <section v-if="analysisFailures.length" class="analysis-results">
           <table class="results analysis-table">
             <thead>
-            <tr>
-              <th>序号</th>
-              <th>昵称</th>
-              <th>职业</th>
-              <th>所在团长</th>
-              <th>击败 (&lt;{{ formatThresholdValue(analysisThresholds.global.kills) }})</th>
-              <th>对玩家伤害 (&lt;{{ formatThresholdValue(analysisThresholds.global.damage_to_players) }})</th>
-              <th>对建筑伤害 (&lt;{{ formatThresholdValue(analysisThresholds.global.damage_to_structures) }})</th>
-              <th>治疗量 (&lt;{{ formatThresholdValue(analysisThresholds.suwen.healing_amount) }})</th>
-              <th>青灯焚骨 (&lt;{{ formatThresholdValue(analysisThresholds.jiuling.skill_qingdeng) }})</th>
-              <th>控制 (&lt;{{ formatThresholdValue(analysisThresholds.tieyi.control_count) }})</th>
-            </tr>
+              <tr>
+                <th>序号</th>
+                <th>昵称</th>
+                <th>职业</th>
+                <th>所在团长</th>
+                <th>击败 (&lt;{{ formatThresholdValue(analysisThresholds.global.kills) }})</th>
+                <th>对玩家伤害 (&lt;{{ formatThresholdValue(analysisThresholds.global.damage_to_players) }})</th>
+                <th>对建筑伤害 (&lt;{{ formatThresholdValue(analysisThresholds.global.damage_to_structures) }})</th>
+                <th>治疗量 (&lt;{{ formatThresholdValue(analysisThresholds.suwen.healing_amount) }})</th>
+                <th>青灯焚骨 (&lt;{{ formatThresholdValue(analysisThresholds.jiuling.skill_qingdeng) }})</th>
+                <th>控制 (&lt;{{ formatThresholdValue(analysisThresholds.tieyi.control_count) }})</th>
+              </tr>
             </thead>
             <tbody>
-            <tr v-for="(row, idx) in analysisFailures" :key="row.row_id">
-              <td>{{ idx + 1 }}</td>
-              <td>{{ row.recorded_nick }}</td>
-              <td :style="professionStyle(row.profession_name)">{{ row.profession_name }}</td>
-              <td>{{ row.leader_nick }}</td>
-              <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.kills) }}</td>
-              <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.damage_to_players) }}</td>
-              <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.damage_to_structures) }}</td>
-              <td>{{ row.profession_name === '素问' ? formatAnalysisValue(row.healing_amount) : '非考察指标' }}</td>
-              <td>{{ row.profession_name === '九灵' ? formatAnalysisValue(row.skill_qingdeng) : '非考察指标' }}</td>
-              <td>{{ row.profession_name === '铁衣' ? formatAnalysisValue(row.control_count) : '非考察指标' }}</td>
-            </tr>
+              <tr v-for="(row, idx) in analysisFailures" :key="row.row_id">
+                <td>{{ idx + 1 }}</td>
+                <td>{{ row.recorded_nick }}</td>
+                <td :style="professionStyle(row.profession_name)">{{ row.profession_name }}</td>
+                <td>{{ row.leader_nick }}</td>
+                <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.kills) }}</td>
+                <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.damage_to_players) }}</td>
+                <td>{{ row.profession_name === '素问' ? '非考察指标' : formatAnalysisValue(row.damage_to_structures) }}</td>
+                <td>{{ row.profession_name === '素问' ? formatAnalysisValue(row.healing_amount) : '非考察指标' }}</td>
+                <td>{{ row.profession_name === '九灵' ? formatAnalysisValue(row.skill_qingdeng) : '非考察指标' }}</td>
+                <td>{{ row.profession_name === '铁衣' ? formatAnalysisValue(row.control_count) : '非考察指标' }}</td>
+              </tr>
             </tbody>
           </table>
         </section>

@@ -19,12 +19,12 @@
             @keydown="onKeydown"
             @compositionstart="composing = true"
             @compositionend="onCompositionEnd"
-          />
+          >
           <ul
             v-show="showDropdown"
+            id="player-listbox"
             class="dropdown"
             role="listbox"
-            id="player-listbox"
           >
             <li
               v-for="(p, i) in filteredPlayers"
@@ -35,7 +35,8 @@
               @mousedown.prevent="selectPlayer(p)"
               @mousemove="activeIndex = i"
             >
-              <span v-html="highlightLabel(p)"></span>
+              <!-- eslint-disable-next-line vue/no-v-html -->
+              <span v-html="highlightLabel(p)" />
             </li>
             <li v-if="!filteredPlayers.length" class="no-data">无匹配结果</li>
           </ul>
@@ -47,7 +48,7 @@
     <div v-else-if="selectedPlayer" class="table-with-column-control">
       <div class="column-controls">
         <label v-for="col in columnsDef" :key="col.key">
-          <input type="checkbox" v-model="visibleColumns[col.key]" />
+          <input v-model="visibleColumns[col.key]" type="checkbox">
           {{ col.label }}
         </label>
       </div>
@@ -178,7 +179,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, watch, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { pinyin as _pinyin } from 'pinyin-pro'
 import { useTableSort } from '@/composables/table/useTableSort'
 import { useVisibleColumns } from '@/composables/table/useVisibleColumns'
@@ -312,8 +313,8 @@ function highlightLabel(player) {
 
   // 4) 再把占位符替换回 <mark> 标签（此时不会影响其它标签）
   return escaped
-    .replace(/\u0000/g, '<mark>')
-    .replace(/\u0001/g, '</mark>')
+    .replaceAll('\u0000', '<mark>')
+    .replace('\u0001', '</mark>')
 }
 
 

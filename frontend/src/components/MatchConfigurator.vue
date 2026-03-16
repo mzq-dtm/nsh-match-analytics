@@ -3,7 +3,7 @@
     <!-- 文件上传 -->
     <div class="file-upload-container">
       <label for="file-upload">请上传帮会成员数据：</label>
-      <input type="file" id="file-upload" @change="handleFileUpload" />
+      <input id="file-upload" type="file" @change="handleFileUpload">
       <p v-if="fileError" class="error">{{ fileError }}</p>
     </div>
 
@@ -15,59 +15,59 @@
           <h2>职业筛选</h2>
           <div v-for="(job, i) in uniqueJobs" :key="i">
             <input
-                type="checkbox"
-                :value="job"
-                v-model="selectedJobs"
-                :id="job"
-                @change="onJobChange(job)"
-            />
+              :id="job"
+              v-model="selectedJobs"
+              type="checkbox"
+              :value="job"
+              @change="onJobChange(job)"
+            >
             <label :for="job">{{ job }}</label>
           </div>
         </div>
         <div class="filter-section">
           <h2>最低评分</h2>
           <input
-              style="width: 80%; margin-top: 10px;"
-              type="number"
-              v-model="minScore"
-              placeholder="输入最小评分"
-              min="0"
-              :max="maxScore"
-          />
+            v-model="minScore"
+            style="width: 80%; margin-top: 10px;"
+            type="number"
+            placeholder="输入最小评分"
+            min="0"
+            :max="maxScore"
+          >
         </div>
         <div class="job-statistics">
           <h2>职业分布</h2>
-            <h3 v-for="(count, job) in groupJobDistAll" :key="job">
-              {{ job }} : {{ count }}
-            </h3>
+          <h3 v-for="(count, job) in groupJobDistAll" :key="job">
+            {{ job }} : {{ count }}
+          </h3>
         </div>
-        <button @click="exportImage" style="margin-top: 30px; width: 100%;">保存图片</button>
-        <button @click="exportExcel" style="margin-top: 30px; width: 100%;">保存表格</button>
-        <button @click="resetGroups" style="margin-top: 30px; width: 100%;">重置</button>
+        <button style="margin-top: 30px; width: 100%;" @click="exportImage">保存图片</button>
+        <button style="margin-top: 30px; width: 100%;" @click="exportExcel">保存表格</button>
+        <button style="margin-top: 30px; width: 100%;" @click="resetGroups">重置</button>
       </div>
 
       <!-- 中间替补席列表（固定宽度，可垂直滚动） -->
       <div
-          class="member-list"
-          @dragover.prevent
-          @drop="handleDropToList"
+        class="member-list"
+        @dragover.prevent
+        @drop="handleDropToList"
       >
         <h3 class="list-title">
           替补席 ({{ filteredMembers.length }})
         </h3>
         <div
-            class="member-item"
-            v-for="member in filteredMembers"
-            :key="member.name"
-            draggable="true"
-            @dragstart="e => dragStart(e, member, 'list')"
-            @mouseenter="onMouseEnter(member.name)"
-            @mousemove="onMouseMove"
-            @mouseleave="onMouseLeave"
-            :style="{
+          v-for="member in filteredMembers"
+          :key="member.name"
+          class="member-item"
+          draggable="true"
+          :style="{
             backgroundColor: jobColors[member.job] || '#fff',
             color: getContrastColor(jobColors[member.job])
           }"
+          @dragstart="e => dragStart(e, member, 'list')"
+          @mouseenter="onMouseEnter(member.name)"
+          @mousemove="onMouseMove"
+          @mouseleave="onMouseLeave"
         >
           {{ member.name }} - {{ member.job }} - {{ member.totalPower }}
         </div>
@@ -77,36 +77,40 @@
       <div class="groups-wrapper">
         <div class="groups">
           <div
-              class="group"
-              v-for="(col, idx) in groups"
-              :key="idx"
-              @dragover.prevent
-              @drop="e => handleDropToColumn(idx, e)"
+            v-for="(col, idx) in groups"
+            :key="idx"
+            class="group"
+            @dragover.prevent
+            @drop="e => handleDropToColumn(idx, e)"
           >
-            <h4 @mouseenter="onGroupEnter(idx, $event)"
-                @mousemove="onGroupMove"
-                @mouseleave="onGroupLeave">
+            <h4 
+              @mouseenter="onGroupEnter(idx, $event)"
+              @mousemove="onGroupMove"
+              @mouseleave="onGroupLeave"
+            >
               <span>
                 {{ columnTitles[idx] }} ({{ groups[idx].length }}/30，平均 {{ getColumnAverage(idx) }})
               </span>
               <button
-                  @click.stop="clearGroup(idx)"
-                  style="font-size:12px; padding:2px 6px;"
-              >清空</button>
+                style="font-size:12px; padding:2px 6px;"
+                @click.stop="clearGroup(idx)"
+              >
+                清空
+              </button>
             </h4>
             <div
-                class="member-item"
-                v-for="member in col"
-                :key="member.name"
-                draggable="true"
-                @dragstart="e => dragStart(e, member, 'column', idx)"
-                @mouseenter="onMouseEnter(member.name)"
-                @mousemove="onMouseMove"
-                @mouseleave="onMouseLeave"
-                :style="{
+              v-for="member in col"
+              :key="member.name"
+              class="member-item"
+              draggable="true"
+              :style="{
                 backgroundColor: jobColors[member.job] || '#fff',
                 color: getContrastColor(jobColors[member.job])
               }"
+              @dragstart="e => dragStart(e, member, 'column', idx)"
+              @mouseenter="onMouseEnter(member.name)"
+              @mousemove="onMouseMove"
+              @mouseleave="onMouseLeave"
             >
               {{ member.name }} - {{ member.job }} - {{ member.totalPower }}
             </div>
@@ -117,19 +121,19 @@
 
     <!-- 全局浮窗 -->
     <div
-        v-if="hoveredMember"
-        class="global-tooltip"
-        ref="globalTooltip"
-        :style="{ top: tooltipPos.y + 'px', left: tooltipPos.x + 'px' }"
+      v-if="hoveredMember"
+      ref="globalTooltip"
+      class="global-tooltip"
+      :style="{ top: tooltipPos.y + 'px', left: tooltipPos.x + 'px' }"
     >
       <div
-          v-for="(rec, idx) in (
-            historyData[hoveredMember] && historyData[hoveredMember].length
-            ? historyData[hoveredMember]
-            : [{ empty: true }]
-          )"
-          :key="idx"
-          class="record"
+        v-for="(rec, idx) in (
+          historyData[hoveredMember] && historyData[hoveredMember].length
+          ? historyData[hoveredMember]
+          : [{ empty: true }]
+        )"
+        :key="idx"
+        class="record"
       >
         <!-- 无历史数据时显示 -->
         <p v-if="rec.empty">未找到历史数据</p>
@@ -141,53 +145,51 @@
           <p>击杀：{{ rec.kills }}，KD：{{ rec.KD }}，击杀团内排名：{{ rec.rank_kills }}</p>
           <p>玩家伤害：{{ rec.damage_to_players }}，总伤害：{{ rec.total_damage }}，总伤团内排名：{{ rec.rank_damage }}</p>
           <p>治疗：{{ rec.healing }}，总治疗团内排名：{{ rec.rank_healing }}</p>
-          <hr v-if="idx < (historyData[hoveredMember] || []).length - 1" />
+          <hr v-if="idx < (historyData[hoveredMember] || []).length - 1">
         </template>
       </div>
-
     </div>
 
     <!-- 团内职业分布浮窗 -->
     <div
-        v-if="hoveredGroup !== null"
-        class="group-tooltip"
-        ref="groupTooltip"
-        :style="{ top: groupTooltipPos.y + 'px', left: groupTooltipPos.x + 'px' }"
+      v-if="hoveredGroup !== null"
+      ref="groupTooltip"
+      class="group-tooltip"
+      :style="{ top: groupTooltipPos.y + 'px', left: groupTooltipPos.x + 'px' }"
     >
       <div class="record">
         <h2 style="margin:0 0 6px;">职业分布</h2>
-          <h3
-              v-for="(count, job) in getGroupJobCounts(hoveredGroup)"
-              :key="job"
-          >
-            {{ job }}：{{ count }}
-          </h3>
+        <h3
+          v-for="(count, job) in getGroupJobCounts(hoveredGroup)"
+          :key="job"
+        >
+          {{ job }}：{{ count }}
+        </h3>
       </div>
     </div>
 
     <!-- 图片预览弹窗 -->
     <div
-        v-if="showImageModal"
-        class="modal-overlay"
-        @click.self="closeImageModal"
-        @keydown.esc="closeImageModal"
-        tabindex="0"
+      v-if="showImageModal"
+      class="modal-overlay"
+      tabindex="0"
+      @click.self="closeImageModal"
+      @keydown.esc="closeImageModal"
     >
       <div class="modal">
-        <button class="modal-close" @click="closeImageModal" aria-label="关闭">×</button>
+        <button class="modal-close" aria-label="关闭" @click="closeImageModal">×</button>
         <h3 style="margin:0 0 10px;">分团配置导出图</h3>
         <div v-if="exportedImgUrl">
           <img
-              :src="exportedImgUrl"
-              :width="exportedImgWidth"
-              :height="exportedImgHeight"
-              alt="分团配置导出图"
-          />
+            :src="exportedImgUrl"
+            :width="exportedImgWidth"
+            :height="exportedImgHeight"
+            alt="分团配置导出图"
+          >
         </div>
         <div v-else style="padding: 20px 0;">正在生成图片…</div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -296,7 +298,7 @@ const groupJobDistAll = computed(() => {
   })
   // 再遍历所有团成员去累加
   groups.value.flat().forEach(m => {
-    if (counts.hasOwnProperty(m.job)) {
+    if (Object.prototype.hasOwnProperty.call(counts, m.job)) {
       counts[m.job]++
     }
   })
@@ -465,7 +467,7 @@ function getDraggedMember(e) {
   if (!raw) return null
   try {
     return JSON.parse(raw)
-  } catch (_) {
+  } catch {
     return null               // 非法 JSON：直接忽略这次 drop
   }
 }

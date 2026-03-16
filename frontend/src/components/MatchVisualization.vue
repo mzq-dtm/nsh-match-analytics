@@ -7,9 +7,9 @@
         <select v-model="selectedMatch" @change="onMatchChange">
           <option value="" disabled>-- 请选择 --</option>
           <option
-              v-for="m in matches"
-              :key="m.match_id"
-              :value="m.match_id"
+            v-for="m in matches"
+            :key="m.match_id"
+            :value="m.match_id"
           >
             {{ formatMatchName(m.match_name) }}
           </option>
@@ -30,14 +30,14 @@
         <div class="member-filter">
           <h4>成员筛选器</h4>
           <label v-for="opt in memberOptions" :key="opt.value">
-            <input type="radio" v-model="selectedMember" :value="opt.value" /> {{ opt.label }}
+            <input v-model="selectedMember" type="radio" :value="opt.value"> {{ opt.label }}
           </label>
         </div>
         <!-- 数据筛选器 -->
         <div class="data-filter">
           <h4>数据筛选器</h4>
           <label v-for="opt in dataOptions" :key="opt.value">
-            <input type="radio" v-model="selectedData" :value="opt.value" /> {{ opt.label }}
+            <input v-model="selectedData" type="radio" :value="opt.value"> {{ opt.label }}
           </label>
         </div>
       </div>
@@ -45,11 +45,11 @@
       <!-- 右侧：渲染图表 -->
       <div class="main-chart">
         <canvas
-            id="matchChart"
-            ref="chartCanvas"
-            :width="fixedWidth"
-            :height="canvasHeight"
-        ></canvas>
+          id="matchChart"
+          ref="chartCanvas"
+          :width="fixedWidth"
+          :height="canvasHeight"
+        />
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 <template>
-  <MatchRecords @openHistory="openHistory" />
+  <MatchRecords @open-history="openHistory" />
 </template>
 
 <script setup>

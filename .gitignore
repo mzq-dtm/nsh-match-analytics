@@ -6,6 +6,9 @@
 venv/
 __pycache__/
 
+# python linter cache
+.ruff_cache/
+
 # frontend dependencies
 node_modules/
 dist/

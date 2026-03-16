@@ -1,5 +1,5 @@
 <template>
-  <PlayerHistoryPerformance :externalPlayerId="externalPlayerId" />
+  <PlayerHistoryPerformance :external-player-id="externalPlayerId" />
 </template>
 
 <script setup>

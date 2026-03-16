@@ -1,5 +1,5 @@
 <template>
-  <PlayerAttendance @openHistory="openHistory" />
+  <PlayerAttendance @open-history="openHistory" />
 </template>
 
 <script setup>

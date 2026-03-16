@@ -8,6 +8,7 @@ __pycache__/
 
 # frontend dependencies
 node_modules/
+dist/
 
 # sqlite database file
 *.db

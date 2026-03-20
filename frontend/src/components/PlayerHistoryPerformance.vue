@@ -518,4 +518,7 @@ watch(
 .no-data { color: #999; padding: 0.6rem 0.75rem; }
 mark { background: #fff2a8; padding: 0 2px; }
 
+:deep(.results tbody tr:nth-child(5n) td) {
+  border-bottom: 2px solid #616161;
+}
 </style>

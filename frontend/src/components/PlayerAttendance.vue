@@ -252,4 +252,7 @@ onMounted(async () => {
   font-size: 1rem;
 }
 
+:deep(.results tbody tr:nth-child(5n) td) {
+  border-bottom: 2px solid #616161;
+}
 </style>

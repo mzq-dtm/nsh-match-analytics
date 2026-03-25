@@ -163,7 +163,6 @@ const loadEarliest = async (): Promise<void> => {
   const data = await getEarliestMatchDate()
   earliest.value = data.earliest
   startDate.value = data.earliest
-  console.log(data)
 }
 
 const loadAttendance = async (): Promise<void> => {

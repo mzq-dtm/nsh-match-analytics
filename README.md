@@ -41,7 +41,7 @@ nsh-match-analytics 是一个用于管理和分析 **《逆水寒》黄金服端
   - 单击左侧“保存表格”按钮快速将团队配置导出为电子表格。
 
 # 技术栈
-**Frontend:** Vue 3, Vite, TypeScript
+**Frontend:** Vue 3, Vite, TypeScript  
 **Backend:** Python, Flask, Gunicorn  
 **Database:** SQLite, Pandas  
 **Deployment:** Nginx, systemd

@@ -29,159 +29,161 @@
     <div class="attendance-table-wrapper">
       <table class="results">
         <thead>
-          <tr>
-            <th>序号</th>
-            <th @click="sortBy('player_id')">
-              玩家&nbsp;ID
-              <span v-if="sortKey === 'player_id'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('nicknames')">
-              历史昵称
-              <span v-if="sortKey === 'nicknames'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_combat_power')">
-              总战力
-              <span v-if="sortKey === 'total_combat_power'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('attendance_rate')">
-              出勤率
-              <span v-if="sortKey === 'attendance_rate'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('first_match_time')">
-              首次联赛时间
-              <span v-if="sortKey === 'first_match_time'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('last_match_time')">
-              最后联赛时间
-              <span v-if="sortKey === 'last_match_time'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_damage_to_players')">
-              总对玩家伤害
-              <span v-if="sortKey === 'total_damage_to_players'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_damage_to_structures')">
-              总对建筑伤害
-              <span v-if="sortKey === 'total_damage_to_structures'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_kills')">
-              总击杀
-              <span v-if="sortKey === 'total_kills'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_kd')">
-              总KD
-              <span v-if="sortKey === 'total_kd'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_healing')">
-              总治疗
-              <span v-if="sortKey === 'total_healing'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_control')">
-              总控制
-              <span v-if="sortKey === 'total_control'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-            <th @click="sortBy('total_qingdeng')">
-              总青灯焚骨
-              <span v-if="sortKey === 'total_qingdeng'">{{ sortAsc ? '▲' : '▼' }}</span>
-            </th>
-          </tr>
+        <tr>
+          <th>序号</th>
+          <th @click="sortBy('player_id')">
+            玩家&nbsp;ID
+            <span v-if="sortKey === 'player_id'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('nicknames')">
+            历史昵称
+            <span v-if="sortKey === 'nicknames'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_combat_power')">
+            总战力
+            <span v-if="sortKey === 'total_combat_power'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('attendance_rate')">
+            出勤率
+            <span v-if="sortKey === 'attendance_rate'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('first_match_time')">
+            首次联赛时间
+            <span v-if="sortKey === 'first_match_time'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('last_match_time')">
+            最后联赛时间
+            <span v-if="sortKey === 'last_match_time'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_damage_to_players')">
+            总对玩家伤害
+            <span v-if="sortKey === 'total_damage_to_players'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_damage_to_structures')">
+            总对建筑伤害
+            <span v-if="sortKey === 'total_damage_to_structures'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_kills')">
+            总击杀
+            <span v-if="sortKey === 'total_kills'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_kd')">
+            总KD
+            <span v-if="sortKey === 'total_kd'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_healing')">
+            总治疗
+            <span v-if="sortKey === 'total_healing'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_control')">
+            总控制
+            <span v-if="sortKey === 'total_control'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+          <th @click="sortBy('total_qingdeng')">
+            总青灯焚骨
+            <span v-if="sortKey === 'total_qingdeng'">{{ sortAsc ? '▲' : '▼' }}</span>
+          </th>
+        </tr>
         </thead>
         <tbody>
-          <tr v-for="(row, idx) in sortedRows" :key="row.player_id">
-            <td>{{ idx + 1 }}</td>
-            <td style="cursor:pointer" @click="gotoHistory(row.player_id)">{{ row.player_id }}</td>
-            <!-- eslint-disable-next-line vue/no-v-html -->
-            <td style="cursor:pointer" @click="gotoHistory(row.player_id)" v-html="row.nicknames.replace(/\n/g, '<br>')" />
-            <td>{{ row.total_combat_power }}</td>
-            <td>
-              {{ row.attended }}&nbsp;/&nbsp;{{ row.total_matches }}
-              <span class="rate">({{ (row.attendance_rate * 100).toFixed(0) }}%)</span>
-            </td>
-            <td>{{ formatDateTime(row.first_match_time) }}</td>
-            <td>{{ formatDateTime(row.last_match_time) }}</td>
-            <td>{{ fmtWanIfBig(row.total_damage_to_players) }}</td>
-            <td>{{ fmtWanIfBig(row.total_damage_to_structures) }}</td>
-            <td>{{ row.total_kills }}</td>
-            <td>{{ row.total_kd.toFixed(2) }}</td>
-            <td>{{ fmtWanIfBig(row.total_healing) }}</td>
-            <td>{{ row.total_control }}</td>
-            <td>{{ row.total_qingdeng }}</td>
-          </tr>
+        <tr v-for="(row, idx) in sortedRows" :key="row.player_id">
+          <td>{{ idx + 1 }}</td>
+          <td style="cursor:pointer" @click="gotoHistory(row.player_id)">{{ row.player_id }}</td>
+          <!-- eslint-disable-next-line vue/no-v-html -->
+          <td style="cursor:pointer" @click="gotoHistory(row.player_id)" v-html="row.nicknames.replace(/\n/g, '<br>')" />
+          <td>{{ row.total_combat_power }}</td>
+          <td>
+            {{ row.attended }}&nbsp;/&nbsp;{{ row.total_matches }}
+            <span class="rate">({{ (row.attendance_rate * 100).toFixed(0) }}%)</span>
+          </td>
+          <td>{{ formatDateTime(row.first_match_time) }}</td>
+          <td>{{ formatDateTime(row.last_match_time) }}</td>
+          <td>{{ fmtWanIfBig(row.total_damage_to_players) }}</td>
+          <td>{{ fmtWanIfBig(row.total_damage_to_structures) }}</td>
+          <td>{{ row.total_kills }}</td>
+          <td>{{ row.total_kd.toFixed(2) }}</td>
+          <td>{{ fmtWanIfBig(row.total_healing) }}</td>
+          <td>{{ row.total_control }}</td>
+          <td>{{ row.total_qingdeng }}</td>
+        </tr>
         </tbody>
       </table>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { getAttendance, getEarliestMatchDate, type AttendanceItem } from '@/api/nsh'
 import { useTableSort } from '@/composables/table/useTableSort'
-import { getAttendance, getEarliestMatchDate } from '@/api/nsh'
 
-const emit = defineEmits(['openHistory'])
-const gotoHistory = (id) => { if (id == null) return; emit('openHistory', String(id)) }
+const emit = defineEmits<{
+  (e: 'open-history', playerId: string): void
+}>()
+const gotoHistory = (id: string | number | null | undefined) => {
+  if (id == null) return
+  emit('open-history', String(id))
+}
 
-
-/* ---------- 基本状态 ---------- */
-const earliest  = ref('')
-const today     = new Date().toISOString().slice(0, 10)
-const startDate = ref('')
-const endDate   = ref(today)
-const rows      = ref([])
+const earliest = ref<string>('')
+const today = new Date().toISOString().slice(0, 10)
+const startDate = ref<string>('')
+const endDate = ref<string>(today)
+const rows = ref<AttendanceItem[]>([])
 
 /* ---------- 排序状态 ---------- */
-const { sortKey, sortAsc, sortBy, sortRows } = useTableSort({
+const { sortKey, sortAsc, sortBy, sortRows } = useTableSort<AttendanceItem>({
   initialKey: 'attendance_rate',
   initialAsc: false,
 })
-
 const sortedRows = computed(() => {
-  const base = rows.value.filter(r => Number(r.attendance_rate) > 0)
+  const base = rows.value.filter((r) => Number(r.attendance_rate) > 0)
   return sortRows(base)
 })
 
 /* ---------- 工具 ---------- */
-const formatDateTime = (ts) => {
-  if (!ts)
-    return '-';
-  const d = new Date(ts);
-  const Y = d.getFullYear();
-  const M = String(d.getMonth() + 1).padStart(2, '0');
-  const D = String(d.getDate()).padStart(2, '0');
-  return `${Y}-${M}-${D}`;
-};
+const formatDateTime = (ts: string | null | undefined): string => {
+  if (!ts) return '-'
 
-// >= 10000 显示为 “XXXX万”（直接截断，不四舍五入）；否则显示原数值
-const fmtWanIfBig = (n) => {
-  if (typeof n !== 'number' || isNaN(n)) return '-'
+  const d = new Date(ts)
+  const Y = d.getFullYear()
+  const M = String(d.getMonth() + 1).padStart(2, '0')
+  const D = String(d.getDate()).padStart(2, '0')
+  return `${Y}-${M}-${D}`
+}
+
+const fmtWanIfBig = (n: number | null | undefined): string | number => {
+  if (typeof n !== 'number' || Number.isNaN(n)) return '-'
   if (n >= 10000) return `${Math.trunc(n / 10000)}万`
-  // 小于 1 万，保持原值（可按需加千分位）
   return n
 }
 
 /* ---------- 数据加载 ---------- */
-const loadEarliest = async () => {
-  const data       = await getEarliestMatchDate()
-  earliest.value   = data.earliest
-  startDate.value  = data.earliest
+const loadEarliest = async (): Promise<void> => {
+  const data = await getEarliestMatchDate()
+  earliest.value = data.earliest
+  startDate.value = data.earliest
 }
 
-const loadAttendance = async () => {
+const loadAttendance = async (): Promise<void> => {
   if (!startDate.value || !endDate.value) return
+
   rows.value = await getAttendance({
     start: startDate.value,
     end: endDate.value,
   })
 }
 
-/* ---------- 初始化 ---------- */
 onMounted(async () => {
   try {
     await loadEarliest()
     await loadAttendance()
-  } catch (e) {
-    console.error(e)
+  } catch (error) {
+    console.error(error)
   }
 })
+
+
 </script>
 
 

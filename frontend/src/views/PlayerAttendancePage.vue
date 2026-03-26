@@ -2,7 +2,7 @@
   <PlayerAttendance @open-history="openHistory" />
 </template>
 
-<script setup>
+<script setup lang="ts">
 import PlayerAttendance from '@/components/PlayerAttendance.vue'
 import { useOpenHistoryRoute } from '@/composables/useOpenHistoryRoute'
 

@@ -12,4 +12,4 @@ export const JOB_COLORS = {
   '鸿音': '#e7bd4f',
   '荒羽': '#9f96ce',
   '云瑶': '#de5952',
-}
+} as const

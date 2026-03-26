@@ -2,7 +2,7 @@
   <MatchRecords @open-history="openHistory" />
 </template>
 
-<script setup>
+<script setup lang="ts">
 import MatchRecords from '@/components/MatchRecords.vue'
 import { useOpenHistoryRoute } from '@/composables/useOpenHistoryRoute'
 

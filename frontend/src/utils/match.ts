@@ -1,4 +1,4 @@
-export function formatMatchName(matchName) {
+export function formatMatchName(matchName: string): string {
   const base = String(matchName || '').replace(/\.csv$/i, '')
   const parts = base.split('_')
   const teams = (parts[0] || '').replace(/vs/i, ' vs ')

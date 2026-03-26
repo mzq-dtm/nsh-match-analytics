@@ -1,45 +1,53 @@
 import { computed, ref } from 'vue'
 
 export function useTableHighlight() {
-  const highlightedCols = ref(new Set())
-  const highlightedRows = ref(new Set())
-  const highlightedCells = ref(new Set())
+  const highlightedCols = ref<Set<string>>(new Set())
+  const highlightedRows = ref<Set<string>>(new Set())
+  const highlightedCells = ref<Set<string>>(new Set())
 
-  function toggleSet(setRef, key) {
+  function toggleSet(setRef: { value: Set<string> }, key: string) {
     const next = new Set(setRef.value)
-    if (next.has(key)) next.delete(key)
-    else next.add(key)
+
+    if (next.has(key)) {
+      next.delete(key)
+    } else {
+      next.add(key)
+    }
+
     setRef.value = next
   }
 
-  function onHeaderContext(colKey) {
+  function onHeaderContext(colKey: string) {
     if (!colKey) return
     toggleSet(highlightedCols, colKey)
   }
 
-  function onRowContext(rowId) {
+  function onRowContext(rowId: string | number | null | undefined) {
     if (rowId == null) return
     toggleSet(highlightedRows, String(rowId))
   }
 
-  function onCellContext(rowId, colKey) {
+  function onCellContext(
+    rowId: string | number | null | undefined,
+    colKey: string,
+  ) {
     if (rowId == null || !colKey) return
     toggleSet(highlightedCells, `${rowId}::${colKey}`)
   }
 
-  function isColHighlighted(colKey) {
+  function isColHighlighted(colKey: string) {
     return highlightedCols.value.has(colKey)
   }
 
-  function isRowHighlighted(rowId) {
+  function isRowHighlighted(rowId: string | number) {
     return highlightedRows.value.has(String(rowId))
   }
 
-  function isCellHighlighted(rowId, colKey) {
+  function isCellHighlighted(rowId: string | number, colKey: string) {
     return highlightedCells.value.has(`${rowId}::${colKey}`)
   }
 
-  function cellClass(rowId, colKey) {
+  function cellClass(rowId: string | number, colKey: string) {
     return {
       'ctx-highlight':
         isColHighlighted(colKey) ||

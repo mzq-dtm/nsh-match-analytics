@@ -61,8 +61,8 @@
           class="member-item"
           draggable="true"
           :style="{
-            backgroundColor: jobColors[member.job] || '#fff',
-            color: getContrastColor(jobColors[member.job])
+            backgroundColor: getJobColor(member.job),
+            color: getContrastColor(getJobColor(member.job))
           }"
           @dragstart="e => dragStart(e, member, 'list')"
           @mouseenter="onMouseEnter(member.name)"
@@ -89,7 +89,7 @@
               @mouseleave="onGroupLeave"
             >
               <span>
-                {{ columnTitles[idx] }} ({{ groups[idx].length }}/30，平均 {{ getColumnAverage(idx) }})
+                {{ columnTitles[idx] }} ({{ col.length }}/30，平均 {{ getColumnAverage(idx) }})
               </span>
               <button
                 style="font-size:12px; padding:2px 6px;"
@@ -104,8 +104,8 @@
               class="member-item"
               draggable="true"
               :style="{
-                backgroundColor: jobColors[member.job] || '#fff',
-                color: getContrastColor(jobColors[member.job])
+                backgroundColor: getJobColor(member.job),
+                color: getContrastColor(getJobColor(member.job))
               }"
               @dragstart="e => dragStart(e, member, 'column', idx)"
               @mouseenter="onMouseEnter(member.name)"
@@ -127,16 +127,12 @@
       :style="{ top: tooltipPos.y + 'px', left: tooltipPos.x + 'px' }"
     >
       <div
-        v-for="(rec, idx) in (
-          historyData[hoveredMember] && historyData[hoveredMember].length
-          ? historyData[hoveredMember]
-          : [{ empty: true }]
-        )"
+        v-for="(rec, idx) in hoveredHistoryRecords"
         :key="idx"
         class="record"
       >
         <!-- 无历史数据时显示 -->
-        <p v-if="rec.empty">未找到历史数据</p>
+        <p v-if="'empty' in rec">未找到历史数据</p>
 
         <!-- 有历史记录时正常渲染 -->
         <template v-else>
@@ -145,7 +141,7 @@
           <p>击杀：{{ rec.kills }}，KD：{{ rec.KD }}，击杀团内排名：{{ rec.rank_kills }}</p>
           <p>玩家伤害：{{ rec.damage_to_players }}，总伤害：{{ rec.total_damage }}，总伤团内排名：{{ rec.rank_damage }}</p>
           <p>治疗：{{ rec.healing }}，总治疗团内排名：{{ rec.rank_healing }}</p>
-          <hr v-if="idx < (historyData[hoveredMember] || []).length - 1">
+          <hr v-if="idx < hoveredHistoryRecords.length - 1">
         </template>
       </div>
     </div>
@@ -193,47 +189,66 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, reactive, nextTick, onMounted, onBeforeUnmount } from 'vue'
+<script setup lang="ts">
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import * as XLSX from 'xlsx'
-import { JOB_COLORS } from '@/constants/profession'
-import { getContrastColor } from '@/utils/color'
+import { postPlayerHistoryByNames, type PlayerHistoryByName, type PlayerHistoryByNameItem } from '@/api/nsh'
+import { getContrastColor, getJobColor } from '@/utils/color'
 import { formatMatchName } from '@/utils/match'
-import { postPlayerHistoryByNames } from '@/api/nsh'
 
-const fileError = ref(null)
+type EmptyHistoryItem = {
+  empty: true
+}
+
+type TooltipHistoryItem = PlayerHistoryByNameItem | EmptyHistoryItem
+
+interface Member {
+  name: string
+  job: string
+  totalPower: number
+}
+
+interface TooltipPosition {
+  x: number
+  y: number
+}
+
+const fileError = ref<string | null>(null)
 const fileSelected = ref(false)
-const members = ref([])
-const listMembers = ref([])
-const selectedJobs = ref(['全体成员'])   // 默认全选
+const members = ref<Member[]>([])
+const listMembers = ref<Member[]>([])
+const selectedJobs = ref<string[]>(['全体成员'])
 const minScore = ref(0)
-const uniqueJobs = ref([])
+const uniqueJobs = ref<string[]>([])
 
-// 用于记录当前悬停的玩家和浮窗位置
-const hoveredMember = ref(null)
-const tooltipPos = reactive({ x: 0, y: 0 })
+const hoveredMember = ref<string | null>(null)
+const tooltipPos = reactive<TooltipPosition>({ x: 0, y: 0 })
 
-const hoveredGroup = ref(null)
-const groupTooltipPos = reactive({ x: 0, y: 0 })
+const hoveredGroup = ref<number | null>(null)
+const groupTooltipPos = reactive<TooltipPosition>({ x: 0, y: 0 })
 
-const globalTooltip   = ref(null)
-const groupTooltip    = ref(null)
+const globalTooltip = ref<HTMLElement | null>(null)
+const groupTooltip = ref<HTMLElement | null>(null)
 
-function keepInsideViewport(elRef, pos, cursorX, cursorY) {
+function keepInsideViewport(
+  elRef: { value: HTMLElement | null },
+  pos: TooltipPosition,
+  cursorX: number,
+  cursorY: number,
+): void {
   nextTick(() => {
     const el = elRef.value
     if (!el) return
-    const rect   = el.getBoundingClientRect()
-    const margin = 10        // 与边界/指针的间距
 
-    // ── 横向 ──
+    const rect = el.getBoundingClientRect()
+    const margin = 10
+
     if (cursorX + margin + rect.width > window.innerWidth) {
       pos.x = cursorX - rect.width - margin
     } else {
       pos.x = cursorX + margin
     }
 
-    // ── 纵向 ──
     if (cursorY + margin + rect.height > window.innerHeight) {
       pos.y = cursorY - rect.height - margin
     } else {
@@ -242,72 +257,88 @@ function keepInsideViewport(elRef, pos, cursorX, cursorY) {
   })
 }
 
-function onMouseEnter(name) {
+function onMouseEnter(name: string): void {
   hoveredMember.value = name
 }
 
-function onMouseMove(e) {
+function onMouseMove(e: MouseEvent): void {
   keepInsideViewport(globalTooltip, tooltipPos, e.clientX, e.clientY)
 }
-function onMouseLeave() {
+
+function onMouseLeave(): void {
   hoveredMember.value = null
 }
 
-function onGroupEnter(idx, e) {
+function onGroupEnter(idx: number, e: MouseEvent): void {
   hoveredGroup.value = idx
   keepInsideViewport(groupTooltip, groupTooltipPos, e.clientX, e.clientY)
 }
-function onGroupMove(e) {
+
+function onGroupMove(e: MouseEvent): void {
   keepInsideViewport(groupTooltip, groupTooltipPos, e.clientX, e.clientY)
 }
-function onGroupLeave() {
+
+function onGroupLeave(): void {
   hoveredGroup.value = null
 }
 
-// 统计指定团内各职业人数
-function getGroupJobCounts(idx) {
-  const counts = {}
-  groups.value[idx].forEach(m => {
-    counts[m.job] = (counts[m.job] || 0) + 1
-  })
-  return counts
-}
+const historyData = ref<PlayerHistoryByName>({})
 
-const historyData = ref({})
+const hoveredHistoryRecords = computed<TooltipHistoryItem[]>(() => {
+  const name = hoveredMember.value
+  if (!name) return []
+
+  const records = historyData.value[name]
+  if (records && records.length > 0) {
+    return records
+  }
+
+  return [{ empty: true }]
+})
 
 // 计算所有成员中的最大总战力，用于评分输入框的 max 属性
-const maxScore = computed(() => {
+const maxScore = computed((): number => {
   if (!members.value.length) return 0
-  return Math.max(...members.value.map(m => m.totalPower))
+  return Math.max(...members.value.map((member) => member.totalPower))
 })
 
 // 5 团标题
-const columnTitles = ['一团','二团','三团','四团','五团']
+const columnTitles = ['一团', '二团', '三团', '四团', '五团']
 
 // 5 列数据结构
-const groups = ref([[], [], [], [], []])
+const groups = ref<Member[][]>([[], [], [], [], []])
 
-// 职业到背景色映射
-const jobColors = JOB_COLORS
+const groupJobDistAll = computed<Record<string, number>>(() => {
+  const counts: Record<string, number> = {}
 
-const groupJobDistAll = computed(() => {
-  const counts = {}
-  // 先把所有职业都初始化为 0（跳过“全体成员”）
-  uniqueJobs.value.forEach(job => {
+  uniqueJobs.value.forEach((job) => {
     if (job !== '全体成员') counts[job] = 0
   })
-  // 再遍历所有团成员去累加
-  groups.value.flat().forEach(m => {
-    if (Object.prototype.hasOwnProperty.call(counts, m.job)) {
-      counts[m.job]++
+
+  groups.value.flat().forEach((member) => {
+    if (Object.prototype.hasOwnProperty.call(counts, member.job)) {
+      counts[member.job] = (counts[member.job] ?? 0) + 1
     }
   })
+
   return counts
 })
 
-// 读取并解析 CSV
-function handleFileUpload(event) {
-  // 重置状态
+function getGroupJobCounts(idx: number): Record<string, number> {
+  const counts: Record<string, number> = {}
+
+  const group = groups.value[idx]
+  if (!group) return counts
+
+  group.forEach((member) => {
+    counts[member.job] = (counts[member.job] || 0) + 1
+  })
+
+  return counts
+}
+
+
+function handleFileUpload(event: Event): void {
   fileError.value = null
   fileSelected.value = false
   listMembers.value = []
@@ -316,217 +347,276 @@ function handleFileUpload(event) {
   uniqueJobs.value = []
   historyData.value = {}
 
-  const file = event.target.files[0]
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+
   if (!file || !file.name.endsWith('.csv')) {
     fileError.value = '请上传CSV格式的文件'
     return
   }
+
   fileSelected.value = true
+
   const reader = new FileReader()
-  reader.onload = e => {
-    const rows = e.target.result
-        .split('\n')
-        .map(r => r.trim())
-        .filter(r => r !== '')
-    const headers = rows[0].split(',')
+
+  reader.onload = (loadEvent: ProgressEvent<FileReader>) => {
+    const result = loadEvent.target?.result
+
+    if (typeof result !== 'string') {
+      fileError.value = '文件读取失败'
+      fileSelected.value = false
+      return
+    }
+
+    const rows = result
+      .split('\n')
+      .map((row) => row.trim())
+      .filter((row) => row !== '')
+
+    const headerRow = rows[0]
+    if (!headerRow) {
+      fileError.value = '文件内容为空'
+      fileSelected.value = false
+      return
+    }
+    
+    const headers = headerRow.split(',')
     const nameIdx = headers.indexOf('名称')
     const jobIdx = headers.indexOf('职业')
     const powerIdx = headers.indexOf('总战力')
-    if (nameIdx<0||jobIdx<0||powerIdx<0) {
+
+    if (nameIdx < 0 || jobIdx < 0 || powerIdx < 0) {
       fileError.value = '文件格式不正确，请检查列名'
+      fileSelected.value = false
       return
     }
-    members.value = rows.slice(1).map(r => {
-      const cols = r.split(',')
+
+    const parsedMembers: Member[] = rows.slice(1).map((row) => {
+      const cols = row.split(',')
+
       return {
-        name: cols[nameIdx],
-        job: cols[jobIdx],
-        totalPower: parseInt(cols[powerIdx],10)
+        name: cols[nameIdx] ?? '',
+        job: cols[jobIdx] ?? '',
+        totalPower: Number.parseInt(cols[powerIdx] ?? '0', 10),
       }
     })
-    listMembers.value = [...members.value].sort((a,b)=>b.totalPower-a.totalPower)
-    uniqueJobs.value = ['全体成员', ...new Set(members.value.map(m=>m.job))]
+
+    members.value = parsedMembers
+    listMembers.value = [...parsedMembers].sort((a, b) => b.totalPower - a.totalPower)
+    uniqueJobs.value = ['全体成员', ...new Set(parsedMembers.map((member) => member.job))]
     selectedJobs.value = [...uniqueJobs.value]
-    groups.value = [[],[],[],[],[]]
-    postPlayerHistoryByNames(members.value.map(m => m.name))
-        .then(data => {
-          historyData.value = data;  // 完整赋值后端返回的 { name: [records,…], … }
-        })
-        .catch(err => {
-          console.error('获取玩家历史数据失败', err);
-          fileError.value = '获取玩家历史数据失败，请稍后重试';
-        });
+    groups.value = [[], [], [], [], []]
+
+    postPlayerHistoryByNames(parsedMembers.map((member) => member.name))
+      .then((data) => {
+        historyData.value = data
+      })
+      .catch((err) => {
+        console.error('获取玩家历史数据失败', err)
+        fileError.value = '获取玩家历史数据失败，请稍后重试'
+      })
+
     fileError.value = null
   }
+
   reader.readAsText(file)
 
   saveCache()
 }
 
-// 拖拽开始
-function dragStart(e, member, from, colIndex=null) {
-  e.dataTransfer.setData('member', JSON.stringify(member))
-  e.dataTransfer.setData('from', from)
-  if (from==='column') e.dataTransfer.setData('colIndex', colIndex)
+function getDraggedMember(e: DragEvent): Member | null {
+  const dataTransfer = e.dataTransfer
+  if (!dataTransfer) return null
+
+  const raw = dataTransfer.getData('member')
+  if (!raw) return null
+
+  try {
+    return JSON.parse(raw) as Member
+  } catch {
+    return null
+  }
 }
 
-// 从列拖回列表
-function handleDropToList(e) {
+function dragStart(
+  e: DragEvent,
+  member: Member,
+  from: 'list' | 'column',
+  colIndex: number | null = null,
+): void {
+  const dataTransfer = e.dataTransfer
+  if (!dataTransfer) return
+
+  dataTransfer.setData('member', JSON.stringify(member))
+  dataTransfer.setData('from', from)
+
+  if (from === 'column' && colIndex !== null) {
+    dataTransfer.setData('colIndex', String(colIndex))
+  }
+}
+
+function handleDropToList(e: DragEvent): void {
   const member = getDraggedMember(e)
   if (!member) return
-  if (e.dataTransfer.getData('from')==='column') {
-    const idx = +e.dataTransfer.getData('colIndex')
-    const i = groups.value[idx].findIndex(m=>m.name===member.name)
-    if (i>-1) groups.value[idx].splice(i,1)
+
+  const dataTransfer = e.dataTransfer
+  if (!dataTransfer) return
+
+  if (dataTransfer.getData('from') === 'column') {
+    const idx = Number(dataTransfer.getData('colIndex'))
+    const group = groups.value[idx]
+
+    if (!group) return
+
+    const memberIndex = group.findIndex((item) => item.name === member.name)
+    if (memberIndex > -1) {
+      group.splice(memberIndex, 1)
+    }
+
     listMembers.value.push(member)
-    listMembers.value.sort((a,b)=>b.totalPower-a.totalPower)
+    listMembers.value.sort((a, b) => b.totalPower - a.totalPower)
   }
 }
 
-// 拖到某团（限制30人）
-function handleDropToColumn(colIndex,e) {
-  if (groups.value[colIndex].length>=30) return
+function handleDropToColumn(colIndex: number, e: DragEvent): void {
+  const targetGroup = groups.value[colIndex]
+  if (!targetGroup || targetGroup.length >= 30) return
+
   const member = getDraggedMember(e)
   if (!member) return
-  const from = e.dataTransfer.getData('from')
-  if (from==='list') {
-    const i = listMembers.value.findIndex(m=>m.name===member.name)
-    if (i>-1) listMembers.value.splice(i,1)
-  } else {
-    const f = +e.dataTransfer.getData('colIndex')
-    const i = groups.value[f].findIndex(m=>m.name===member.name)
-    if (i>-1) groups.value[f].splice(i,1)
+
+  const dataTransfer = e.dataTransfer
+  if (!dataTransfer) return
+
+  const from = dataTransfer.getData('from')
+
+  if (from === 'list') {
+    const memberIndex = listMembers.value.findIndex((item) => item.name === member.name)
+    if (memberIndex > -1) {
+      listMembers.value.splice(memberIndex, 1)
+    }
+  } else if (from === 'column') {
+    const fromIndex = Number(dataTransfer.getData('colIndex'))
+    const fromGroup = groups.value[fromIndex]
+
+    if (fromGroup) {
+      const memberIndex = fromGroup.findIndex((item) => item.name === member.name)
+      if (memberIndex > -1) {
+        fromGroup.splice(memberIndex, 1)
+      }
+    }
   }
-  groups.value[colIndex].push(member)
-  groups.value[colIndex].sort((a, b)=>a.job.localeCompare(b.job))
+
+  targetGroup.push(member)
+  targetGroup.sort((a, b) => a.job.localeCompare(b.job))
 }
 
-// 计算某团平均总战力
-function getColumnAverage(idx) {
-  const col = groups.value[idx]
-  if (!col.length) return 0
-  const sum = col.reduce((acc,m)=>acc+m.totalPower,0)
-  return (sum/col.length).toFixed(0)
+function getColumnAverage(idx: number): string | number {
+  const group = groups.value[idx]
+  if (!group || !group.length) return 0
+
+  const sum = group.reduce((acc, member) => acc + member.totalPower, 0)
+  return (sum / group.length).toFixed(0)
 }
 
-const filteredMembers = computed(() =>
-    listMembers.value
-        .filter(m=>selectedJobs.value.includes('全体成员') || selectedJobs.value.includes(m.job))
-        .filter(m=>m.totalPower>=minScore.value)
-        .sort((a,b)=>b.totalPower-a.totalPower)
+const filteredMembers = computed<Member[]>(() =>
+  listMembers.value
+    .filter(
+      (member) =>
+        selectedJobs.value.includes('全体成员') || selectedJobs.value.includes(member.job),
+    )
+    .filter((member) => member.totalPower >= minScore.value)
+    .sort((a, b) => b.totalPower - a.totalPower),
 )
 
-
-function onJobChange(changedJob) {
-  // ① 点击“全体成员”
+function onJobChange(changedJob: string): void {
   if (changedJob === '全体成员') {
     if (selectedJobs.value.includes('全体成员')) {
-      // 勾上全体 → 把所有职业都加入
-      selectedJobs.value = ['全体成员', ...uniqueJobs.value.filter(j => j !== '全体成员')]
+      selectedJobs.value = ['全体成员', ...uniqueJobs.value.filter((job) => job !== '全体成员')]
     } else {
-      // 取消全体 → 清空所有勾选
       selectedJobs.value = []
     }
     return
   }
 
-  // ② 点单个职业
-  const allJobs = uniqueJobs.value.filter(j => j !== '全体成员')
+  const allJobs = uniqueJobs.value.filter((job) => job !== '全体成员')
   const hasAll = selectedJobs.value.includes('全体成员')
 
-  // 如果曾经勾了“全体”，先去掉
   if (hasAll) {
-    selectedJobs.value = selectedJobs.value.filter(j => j !== '全体成员')
+    selectedJobs.value = selectedJobs.value.filter((job) => job !== '全体成员')
   }
 
-  // 若此时所有具体职业都勾上了 → 自动勾回“全体成员”
-  const allChecked = allJobs.every(j => selectedJobs.value.includes(j))
+  const allChecked = allJobs.every((job) => selectedJobs.value.includes(job))
   if (allChecked && !selectedJobs.value.includes('全体成员')) {
     selectedJobs.value.unshift('全体成员')
   }
 }
 
-function resetGroups() {
-  // 清空所有团
+function resetGroups(): void {
   groups.value = [[], [], [], [], []]
-  // 把所有成员重新放回列表，并按战力降序排序
   listMembers.value = [...members.value].sort((a, b) => b.totalPower - a.totalPower)
 }
 
-function clearGroup(idx) {
-  // 先把该团成员回补到 listMembers
-  listMembers.value.push(...groups.value[idx])
-  // 再清空该团
+function clearGroup(idx: number): void {
+  const group = groups.value[idx]
+  if (!group) return
+
+  listMembers.value.push(...group)
   groups.value[idx] = []
-  // 重新排序列表
   listMembers.value.sort((a, b) => b.totalPower - a.totalPower)
 }
 
-function getDraggedMember(e) {
-  const raw = e.dataTransfer.getData('member')
-  if (!raw) return null
-  try {
-    return JSON.parse(raw)
-  } catch {
-    return null               // 非法 JSON：直接忽略这次 drop
-  }
-}
+function exportExcel(): void {
+  const gap = 3
+  const wb = XLSX.utils.book_new()
+  const ws: Record<string, unknown> = {}
+  const merges: XLSX.Range[] = []
 
-/* =========  保存本地：导出 Excel ========= */
-function exportExcel () {
-  const gap = 3;                        // 每团 2 列 + 1 空列 → A B | D E | G H …
-  const wb  = XLSX.utils.book_new();
-  const ws  = {};
-  const merges = [];
+  const maxRows = Math.max(...groups.value.map((group) => group.length))
 
-  const maxRows = Math.max(...groups.value.map(g => g.length)); // 数据行 + 标题行
+  groups.value.forEach((group, groupIndex) => {
+    const baseCol = groupIndex * gap
 
-  /* —— 写入五团 —— */
-  groups.value.forEach((group, gIdx) => {
-    const baseCol = gIdx * gap;         // 0 / 3 / 6 …
+    const header = columnTitles[groupIndex]
+    ws[XLSX.utils.encode_cell({ c: baseCol, r: 0 })] = { v: header, t: 's' }
+    merges.push({
+      s: { c: baseCol, r: 0 },
+      e: { c: baseCol + 1, r: 0 },
+    })
 
-    /* ① 标题行：合并两列，只写团名 */
-    const header = columnTitles[gIdx];
-    ws[XLSX.utils.encode_cell({ c: baseCol, r: 0 })] = { v: header, t: 's' };
-    merges.push({ s: { c: baseCol, r: 0 }, e: { c: baseCol + 1, r: 0 } });
+    group.forEach((member, rowIndex) => {
+      const r = rowIndex + 1
+      ws[XLSX.utils.encode_cell({ c: baseCol, r })] = { v: member.name, t: 's' }
+      ws[XLSX.utils.encode_cell({ c: baseCol + 1, r })] = { v: member.job, t: 's' }
+    })
+  })
 
-    /* ② 成员行：名称 | 职业 */
-    group.forEach((m, rowIdx) => {
-      const r = rowIdx + 1;             // 数据行从 1 开始
-      ws[XLSX.utils.encode_cell({ c: baseCol,     r })] = { v: m.name, t: 's' };
-      ws[XLSX.utils.encode_cell({ c: baseCol + 1, r })] = { v: m.job,  t: 's' };
-    });
-  });
-
-  /* —— Sheet 范围、列宽、合并 —— */
-  ws['!ref']    = XLSX.utils.encode_range({
+  ws['!ref'] = XLSX.utils.encode_range({
     s: { c: 0, r: 0 },
-    e: { c: groups.value.length * gap - 2, r: maxRows }
-  });
-  ws['!merges'] = merges;
+    e: { c: groups.value.length * gap - 2, r: maxRows },
+  })
+  ws['!merges'] = merges
 
-  /* 每团 2 列：名称列宽 14（≈7 个中文），职业列宽 10，再加 1 空列 */
-  ws['!cols'] = Array.from({ length: groups.value.length }, () => (
-      [{ wch: 14 }, { wch: 10 }, { wch: 2 }]
-  )).flat();
+  ws['!cols'] = Array.from({ length: groups.value.length }, () => [
+    { wch: 14 },
+    { wch: 10 },
+    { wch: 2 },
+  ]).flat()
 
-  /* —— 写文件 —— */
-  XLSX.utils.book_append_sheet(wb, ws, '分团列表');
-  XLSX.writeFile(wb, '分团配置.xlsx');   // 不再需要 cellStyles:true
+  XLSX.utils.book_append_sheet(wb, ws as XLSX.WorkSheet, '分团列表')
+  XLSX.writeFile(wb, '分团配置.xlsx')
 }
 
-/* =========  导出图片 ========= */
-const exportedImgUrl = ref(null)
+const exportedImgUrl = ref<string | null>(null)
 const exportedImgWidth = ref(0)
 const exportedImgHeight = ref(0)
 const showImageModal = ref(false)
 
-function closeImageModal() {
+function closeImageModal(): void {
   showImageModal.value = false
 }
 
-function exportImage () {
-  // —— 布局参数（和右侧UI一致）——
+function exportImage(): void {
   const colWidth = 300
   const gap = 10
   const padding = 20
@@ -534,177 +624,232 @@ function exportImage () {
   const headerHeight = 44
   const cols = 5
 
-  const maxRows = Math.max(0, ...groups.value.map(g => g.length))
-  const widthCss  = padding * 2 + cols * colWidth + (cols - 1) * gap
+  const maxRows = Math.max(0, ...groups.value.map((group) => group.length))
+  const widthCss = padding * 2 + cols * colWidth + (cols - 1) * gap
   const heightCss = padding * 2 + headerHeight + maxRows * rowHeight
 
-  exportedImgWidth.value  = widthCss
+  exportedImgWidth.value = widthCss
   exportedImgHeight.value = heightCss
 
-  // —— 按设备像素比提高清晰度 ——
   const dpr = window.devicePixelRatio || 1
   const canvas = document.createElement('canvas')
   canvas.width = Math.max(1, Math.floor(widthCss * dpr))
   canvas.height = Math.max(1, Math.floor(heightCss * dpr))
+
   const ctx = canvas.getContext('2d')
+  if (!ctx) return
+
   ctx.scale(dpr, dpr)
 
-  // 背景与通用样式
   ctx.fillStyle = '#ffffff'
   ctx.fillRect(0, 0, widthCss, heightCss)
   ctx.strokeStyle = '#dddddd'
   ctx.lineWidth = 1
   ctx.textBaseline = 'middle'
 
-  const headerFont = '600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans"'
-  const rowFont    = '14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans"'
+  const headerFont =
+    '600 16px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans"'
+  const rowFont =
+    '14px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,"Noto Sans"'
 
-  function drawCenteredHeader(text, x0, y0, w, h) {
+  function drawCenteredHeader(
+    ctx:CanvasRenderingContext2D,
+    text: string, 
+    x0: number, 
+    y0: number, 
+    w: number, 
+    h: number
+  ): void {
     ctx.font = headerFont
     ctx.fillStyle = '#111827'
-    const tw = ctx.measureText(text).width
-    ctx.fillText(text, x0 + w / 2 - tw / 2, y0 + h / 2)
+    const textWidth = ctx.measureText(text).width
+    ctx.fillText(text, x0 + w / 2 - textWidth / 2, y0 + h / 2)
   }
-  function drawClippedRowText(text, x, y, maxWidth, color) {
+
+  function drawClippedRowText(
+    ctx:CanvasRenderingContext2D,
+    text: string,
+    x: number,
+    y: number,
+    maxWidth: number,
+    color: string,
+  ): void {
     ctx.font = rowFont
     ctx.fillStyle = color
+
     if (ctx.measureText(text).width <= maxWidth) {
       ctx.fillText(text, x, y + rowHeight / 2)
       return
     }
+
     const ellipsis = '…'
-    let t = text
-    while (t.length > 0 && ctx.measureText(t + ellipsis).width > maxWidth) {
-      t = t.slice(0, -1)
+    let clippedText = text
+
+    while (
+      clippedText.length > 0 &&
+      ctx.measureText(clippedText + ellipsis).width > maxWidth
+    ) {
+      clippedText = clippedText.slice(0, -1)
     }
-    ctx.fillText(t + ellipsis, x, y + rowHeight / 2)
+
+    ctx.fillText(clippedText + ellipsis, x, y + rowHeight / 2)
   }
 
-  // —— 五团绘制 ——
-  for (let gIdx = 0; gIdx < cols; gIdx++) {
-    const group = groups.value[gIdx] || []
-    const x0 = padding + gIdx * (colWidth + gap)
+  for (let groupIndex = 0; groupIndex < cols; groupIndex++) {
+    const group = groups.value[groupIndex] || []
+    const x0 = padding + groupIndex * (colWidth + gap)
     const y0 = padding
 
-    // 头部
     ctx.fillStyle = '#f3f4f6'
     ctx.fillRect(x0, y0, colWidth, headerHeight)
     ctx.strokeRect(x0, y0, colWidth, headerHeight)
-    const headerText = `${columnTitles[gIdx]} (${group.length}/30，平均 ${getColumnAverage(gIdx)})`
-    drawCenteredHeader(headerText, x0, y0, colWidth, headerHeight)
 
-    // 行
-    for (let i = 0; i < group.length; i++) {
-      const m = group[i]
-      const yRow = y0 + headerHeight + i * rowHeight
+    const headerText = `${columnTitles[groupIndex]} (${group.length}/30，平均 ${getColumnAverage(groupIndex)})`
+    drawCenteredHeader(ctx, headerText, x0, y0, colWidth, headerHeight)
 
-      const bg = jobColors[m.job] || '#ffffff'
+    group.forEach((member, index) => {
+      const yRow = y0 + headerHeight + index * rowHeight
+
+      const bg = getJobColor(member.job)
       ctx.fillStyle = bg
       ctx.fillRect(x0, yRow, colWidth, rowHeight)
       ctx.strokeRect(x0, yRow, colWidth, rowHeight)
 
       const fg = getContrastColor(bg)
-      const text = `${m.name} - ${m.job} - ${m.totalPower}`
+      const text = `${member.name} - ${member.job} - ${member.totalPower}`
       const paddingX = 8
-      drawClippedRowText(text, x0 + paddingX, yRow, colWidth - paddingX * 2, fg)
-    }
+      drawClippedRowText(ctx, text, x0 + paddingX, yRow, colWidth - paddingX * 2, fg)
+    })
   }
 
   exportedImgUrl.value = canvas.toDataURL('image/png')
   showImageModal.value = true
 
-  // 让弹窗获得焦点以便接收 Esc
   nextTick(() => {
-    document.querySelector('.modal-overlay')?.focus()
+    const modalOverlay = document.querySelector('.modal-overlay') as HTMLElement | null
+    modalOverlay?.focus()
   })
 }
 
-/* ========= 缓存：保存/恢复 ========= */
+interface CacheSnapshot {
+  version: number
+  ts: number
+  members: Member[]
+  listMembers: Member[]
+  groups: Member[][]
+  selectedJobs: string[]
+  minScore: number
+  uniqueJobs: string[]
+  fileSelected: boolean
+  historyData: PlayerHistoryByName
+}
+
 const CACHE_KEY = 'nsh-match-configurator-cache/v1'
 
-function buildStateSnapshot() {
+function buildStateSnapshot(): CacheSnapshot {
   return {
     version: 1,
     ts: Date.now(),
-    members:       members.value,
-    listMembers:   listMembers.value,
-    groups:        groups.value,
-    selectedJobs:  selectedJobs.value,
-    minScore:      minScore.value,
-    uniqueJobs:    uniqueJobs.value,
-    fileSelected:  fileSelected.value,
-    historyData:   historyData.value,
+    members: members.value,
+    listMembers: listMembers.value,
+    groups: groups.value,
+    selectedJobs: selectedJobs.value,
+    minScore: minScore.value,
+    uniqueJobs: uniqueJobs.value,
+    fileSelected: fileSelected.value,
+    historyData: historyData.value,
   }
 }
 
-function saveCache() {
+function saveCache(): void {
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify(buildStateSnapshot()))
-  } catch (e) {
-    console.warn('保存缓存失败：', e)
+  } catch (error) {
+    console.warn('保存缓存失败：', error)
   }
 }
 
-function loadCache() {
+function loadCache(): boolean {
+  function startOfSundayWeek(date: Date): Date {
+    const result = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+    result.setHours(0, 0, 0, 0)
 
-  // 取某天所在“周日开头的一周”的周日 00:00（本地时区）。
-  // 业务规则：缓存仅在“本周”有效，跨周自动失效并清除。
-  function startOfSundayWeek(d) {
-    const x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
-    x.setHours(0, 0, 0, 0);
-    const day = x.getDay(); // Sun=0 ... Sat=6
-    x.setDate(x.getDate() - day); // 回退到本周日
-    return x;
+    const day = result.getDay()
+    result.setDate(result.getDate() - day)
+    return result
   }
 
   try {
     const raw = localStorage.getItem(CACHE_KEY)
     if (!raw) return false
-    const data = JSON.parse(raw)
 
-    const thisSun = startOfSundayWeek(new Date());
-    const t = new Date(data.ts || 0);
-    if (t < thisSun) {
-      localStorage.removeItem(CACHE_KEY);
-      return false;
+    const data = JSON.parse(raw) as Partial<CacheSnapshot> & { version?: number; ts?: number }
+
+    const thisSunday = startOfSundayWeek(new Date())
+    const cacheTime = new Date(data.ts || 0)
+
+    if (cacheTime < thisSunday) {
+      localStorage.removeItem(CACHE_KEY)
+      return false
     }
 
     if (!data || data.version !== 1) return false
 
-    if (Array.isArray(data.members))      members.value = data.members
-    if (Array.isArray(data.listMembers))  listMembers.value = data.listMembers
-    if (Array.isArray(data.groups) && data.groups.length === 5) groups.value = data.groups
-    if (Array.isArray(data.selectedJobs)) selectedJobs.value = data.selectedJobs
-    if (typeof data.minScore === 'number') minScore.value = data.minScore
-    if (Array.isArray(data.uniqueJobs))   uniqueJobs.value = data.uniqueJobs
+    if (Array.isArray(data.members)) {
+      members.value = data.members
+    }
 
-    fileSelected.value = !!data.fileSelected || (members.value && members.value.length > 0)
-    historyData.value  = data.historyData || {}
+    if (Array.isArray(data.listMembers)) {
+      listMembers.value = data.listMembers
+    }
+
+    if (Array.isArray(data.groups) && data.groups.length === 5) {
+      groups.value = data.groups
+    }
+
+    if (Array.isArray(data.selectedJobs)) {
+      selectedJobs.value = data.selectedJobs
+    }
+
+    if (typeof data.minScore === 'number') {
+      minScore.value = data.minScore
+    }
+
+    if (Array.isArray(data.uniqueJobs)) {
+      uniqueJobs.value = data.uniqueJobs
+    }
+
+    fileSelected.value = !!data.fileSelected || members.value.length > 0
+    historyData.value = data.historyData ?? {}
 
     return true
-  } catch (e) {
-    console.warn('读取缓存失败：', e)
+  } catch (error) {
+    console.warn('读取缓存失败：', error)
     return false
   }
 }
 
-/* 页面离开时保存；进入时尝试恢复 */
-const persistOnLeave = () => saveCache()
-const onVisibilityChange = () => {
-  if (document.visibilityState === 'hidden') saveCache()
+const persistOnLeave = (): void => {
+  saveCache()
 }
 
-onMounted(() => {
+const onVisibilityChange = (): void => {
+  if (document.visibilityState === 'hidden') {
+    saveCache()
+  }
+}
+
+onMounted((): void => {
   loadCache()
   window.addEventListener('beforeunload', persistOnLeave)
-  window.addEventListener('pagehide',     persistOnLeave)
+  window.addEventListener('pagehide', persistOnLeave)
   document.addEventListener('visibilitychange', onVisibilityChange)
 })
 
-onBeforeUnmount(() => {
+onBeforeUnmount((): void => {
   saveCache()
   window.removeEventListener('beforeunload', persistOnLeave)
-  window.removeEventListener('pagehide',     persistOnLeave)
+  window.removeEventListener('pagehide', persistOnLeave)
   document.removeEventListener('visibilitychange', onVisibilityChange)
 })
 
@@ -864,7 +1009,5 @@ onBeforeUnmount(() => {
   max-height: none;
   margin: 0 auto;
 }
-
-
 
 </style>

@@ -9,9 +9,12 @@
     "preview": "vite preview",
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
-    "lint": "run-s lint:*",
-    "lint:oxlint": "oxlint . --fix",
-    "lint:eslint": "eslint . --fix --cache"
+    "lint": "run-s lint:oxlint lint:eslint",
+    "lint:oxlint": "oxlint .",
+    "lint:eslint": "eslint .",
+    "lint:fix": "run-s lint:fix:oxlint lint:fix:eslint",
+    "lint:fix:oxlint": "oxlint . --fix",
+    "lint:fix:eslint": "eslint . --fix"
   },
   "dependencies": {
     "pinyin-pro": "^3.28.0",

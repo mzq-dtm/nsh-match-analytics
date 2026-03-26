@@ -250,8 +250,7 @@ import {
   type PerformanceItem,
 } from '@/api/nsh'
 import {formatMatchName} from '@/utils/match'
-import {JOB_COLORS} from '@/constants/profession'
-import {getContrastColor} from '@/utils/color'
+import {getContrastColor, getJobColor} from '@/utils/color'
 import {useTableSort} from '@/composables/table/useTableSort'
 import {useVisibleColumns} from '@/composables/table/useVisibleColumns'
 import {useTableHighlight} from '@/composables/table/useTableHighlight'
@@ -1182,7 +1181,7 @@ function professionStyle(
 ): Record<string, string> | null {
   if (!profName) return null
 
-  const color = JOB_COLORS[profName as keyof typeof JOB_COLORS]
+  const color = getJobColor(profName)
   if (!color) return null
 
   return {

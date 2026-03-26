@@ -246,166 +246,45 @@ import {
   getPerformances,
   type MatchItem,
   type MatchResult,
-  type OpponentPerformanceItem,
-  type PerformanceItem,
 } from '@/api/nsh'
 import {formatMatchName} from '@/utils/match'
 import {getContrastColor, getJobColor} from '@/utils/color'
 import {useTableSort} from '@/composables/table/useTableSort'
 import {useVisibleColumns} from '@/composables/table/useVisibleColumns'
 import {useTableHighlight} from '@/composables/table/useTableHighlight'
-import MatchConfigurator from './MatchConfigurator.vue'
+import type {
+  AggregatedPerformanceRow,
+  AnalysisFailureRow,
+  AnalysisThresholds,
+  BarKey,
+  CachedMatchResult,
+  CellContextPayload,
+  NormalizedPerformance,
+  ProfessionAggregatedRow,
+  SubTab,
+  TableColumnConfig,
+  ViewSide,
+  AnalysisResultCheck
+} from '@/features/match-records/types'
+import {
+  ANALYSIS_CHECKS,
+  ANALYSIS_PERCENTILE,
+  SUWEN_ANALYSIS_PERCENTILE,
+  PROFESSION_ANALYSIS_CONFIG,
+  BAR_COLORS,
+  blueKeys,
+  greenKeys,
+  redKeys,
+  yellowKeys,
+} from '@/features/match-records/constants'
+import {
+  buildAnalysisThresholds,
+  getThresholdForCheck,
+  normalizePerformances,
+  buildLeaderAggregation,
+  buildProfessionAggregations,
+} from '@/features/match-records/analysis'
 
-type RawPerformance = PerformanceItem | OpponentPerformanceItem
-
-interface SubTab {
-  key: string
-  label: string
-}
-
-type NormalizedPerformance = {
-  match_id: number
-  player_id: number | null
-  recorded_nick: string
-  level: number
-  profession_name: string | null
-  leader_nick: string | null
-  equipment_score: number | null
-  skill_score: number | null
-  cultivation_score: number | null
-  total_combat_power: number | null
-  kills: number
-  assists: number
-  war_resources: number
-  damage_to_players: number
-  damage_to_structures: number
-  healing_amount: number
-  damage_taken: number
-  serious_injuries: number
-  skill_qingdeng: number
-  skill_huayu: number
-  control_count: number
-  kda: number
-  damage_per_kill: number
-  total_damage: number
-  row_id: string
-}
-
-interface AggregatedPerformanceRow {
-  leader_nick: string | null
-  total_combat_power: number
-  total_count: number
-  kills: number
-  assists: number
-  damage_to_players: number
-  damage_to_structures: number
-  healing_amount: number
-  damage_taken: number
-  serious_injuries: number
-  total_damage: number
-  kda: number
-  damage_per_kill: number
-  avg_total_combat_power: number
-}
-
-interface ProfessionAggregatedRow {
-  profession_name: string | null
-  total_combat_power: number
-  total_count: number
-  kills: number
-  assists: number
-  damage_to_players: number
-  damage_to_structures: number
-  healing_amount: number
-  damage_taken: number
-  serious_injuries: number
-  control_count: number
-  avg_kills: number
-  avg_assists: number
-  avg_damage_to_players: number
-  avg_damage_to_structures: number
-  avg_healing_amount: number
-  avg_damage_taken: number
-  avg_serious_injuries: number
-  avg_control_count: number
-  avg_total_combat_power: number
-}
-
-interface TableColumnConfig {
-  key: string
-  label: string
-  clickable?: boolean
-  professionColor?: boolean
-  bar?: boolean
-  sortable?: boolean
-}
-
-type ViewSide = 'home' | 'away'
-
-type AnalysisCheckKey =
-  | 'kills'
-  | 'damage_to_players'
-  | 'damage_to_structures'
-  | 'healing_amount'
-  | 'skill_qingdeng'
-  | 'control_count'
-
-interface AnalysisCheckConfig {
-  key: AnalysisCheckKey
-  label: string
-}
-
-type AnalysisThresholdGroup = Partial<Record<AnalysisCheckKey, number | null>>
-
-interface AnalysisThresholds {
-  global: AnalysisThresholdGroup
-  suwen: AnalysisThresholdGroup
-  jiuling: AnalysisThresholdGroup
-  tieyi: AnalysisThresholdGroup
-}
-
-interface ProfessionAnalysisRule {
-  mode: 'all_must_fail'
-  checks: AnalysisCheckKey[]
-}
-
-interface AnalysisResultCheck {
-  key: AnalysisCheckKey
-  label: string
-  actual: number
-  threshold: number
-  passed: boolean
-}
-
-type AnalysisFailureRow = NormalizedPerformance & {
-  failedChecks: AnalysisResultCheck[]
-}
-
-interface CachedMatchResult {
-  home_outcome: MatchResult['home_outcome']
-  note: string
-}
-
-type BarKey =
-  | 'kda'
-  | 'damage_per_kill'
-  | 'total_damage'
-  | 'kills'
-  | 'assists'
-  | 'war_resources'
-  | 'damage_to_players'
-  | 'damage_to_structures'
-  | 'healing_amount'
-  | 'damage_taken'
-  | 'serious_injuries'
-  | 'skill_qingdeng'
-  | 'skill_huayu'
-  | 'control_count'
-
-interface CellContextPayload {
-  rowId: string | number | null | undefined
-  colKey: string
-}
 
 const emit = defineEmits<{
   (e: 'open-history', playerId: string): void
@@ -496,41 +375,6 @@ const homeCache = ref<Map<number, NormalizedPerformance[]>>(new Map())
 const awayCache = ref<Map<number, NormalizedPerformance[]>>(new Map())
 const resultCache = ref<Map<number, CachedMatchResult>>(new Map())
 
-const ANALYSIS_CHECKS: Record<AnalysisCheckKey, AnalysisCheckConfig> = {
-  kills: { key: 'kills', label: '击败' },
-  damage_to_players: { key: 'damage_to_players', label: '对玩家伤害' },
-  damage_to_structures: { key: 'damage_to_structures', label: '对建筑伤害' },
-  healing_amount: { key: 'healing_amount', label: '治疗量' },
-  skill_qingdeng: { key: 'skill_qingdeng', label: '青灯焚骨' },
-  control_count: { key: 'control_count', label: '控制' },
-}
-
-const ANALYSIS_PERCENTILE = 0.25
-const SUWEN_ANALYSIS_PERCENTILE = 0.25
-const SUWEN_THRESHOLD_MULTIPLIER = 0.5
-
-const PROFESSION_ANALYSIS_CONFIG: Record<
-  '素问' | '九灵' | '铁衣' | 'default',
-  ProfessionAnalysisRule
-> = {
-  素问: {
-    mode: 'all_must_fail',
-    checks: ['healing_amount'],
-  },
-  九灵: {
-    mode: 'all_must_fail',
-    checks: ['kills', 'damage_to_players', 'damage_to_structures', 'skill_qingdeng'],
-  },
-  铁衣: {
-    mode: 'all_must_fail',
-    checks: ['kills', 'damage_to_players', 'damage_to_structures', 'control_count'],
-  },
-  default: {
-    mode: 'all_must_fail',
-    checks: ['kills', 'damage_to_players', 'damage_to_structures'],
-  },
-}
-
 const isAwayView = computed<boolean>(() => viewSide.value === 'away')
 
 const awayColumnsDefForControl = computed<TableColumnConfig[]>(() =>
@@ -586,8 +430,6 @@ function handleDetailSort(key: string): void {
   detailSort.sortBy(key as keyof NormalizedPerformance & string)
 }
 
-
-
 watch(activeSubTab, (key) => {
   if (key.startsWith('leader-')) {
     const leader = key.slice(7)
@@ -631,44 +473,6 @@ watch(activeSubTab, (key) => {
   activeNestedTab.value = ''
 })
 
-function normalizePerformances(
-  data: RawPerformance[] | null | undefined,
-  side: ViewSide,
-): NormalizedPerformance[] {
-  return (data || []).map((p, idx) => {
-    const kills = Number(p.kills ?? 0) || 0
-    const seriousInjuries = Number(p.serious_injuries ?? 0) || 0
-    const damageToPlayers = Number(p.damage_to_players ?? 0) || 0
-    const damageToStructures = Number(p.damage_to_structures ?? 0) || 0
-    const playerId = p.player_id == null ? null : Number(p.player_id)
-
-    return {
-      ...p,
-      player_id: playerId,
-      level: Number(p.level ?? 0) || 0,
-      equipment_score: p.equipment_score == null ? null : Number(p.equipment_score),
-      skill_score: p.skill_score == null ? null : Number(p.skill_score),
-      cultivation_score: p.cultivation_score == null ? null : Number(p.cultivation_score),
-      total_combat_power: p.total_combat_power == null ? null : Number(p.total_combat_power),
-      kills,
-      assists: Number(p.assists ?? 0) || 0,
-      war_resources: Number(p.war_resources ?? 0) || 0,
-      damage_to_players: damageToPlayers,
-      damage_to_structures: damageToStructures,
-      healing_amount: Number(p.healing_amount ?? 0) || 0,
-      damage_taken: Number(p.damage_taken ?? 0) || 0,
-      serious_injuries: seriousInjuries,
-      skill_qingdeng: Number(p.skill_qingdeng ?? 0) || 0,
-      skill_huayu: Number(p.skill_huayu ?? 0) || 0,
-      control_count: Number(p.control_count ?? 0) || 0,
-      kda: Number((kills / Math.max(seriousInjuries, 1)).toFixed(2)),
-      damage_per_kill: Math.floor((damageToPlayers) / Math.max(kills, 1)),
-      total_damage: damageToPlayers + damageToStructures,
-      row_id: `${side}-${playerId ?? p.recorded_nick ?? 'unknown'}-${idx}`,
-    }
-  })
-}
-
 function applyPerformances(nextRows: NormalizedPerformance[]): void {
   performances.value = nextRows
   origRankRaw.value = new Map(nextRows.map((p, idx) => [p.row_id, idx]))
@@ -699,65 +503,6 @@ function applyPerformances(nextRows: NormalizedPerformance[]): void {
   ]
 
   activateSubTab('all')
-}
-
-function computeNearestRankThreshold(
-  rows: NormalizedPerformance[] | null | undefined,
-  key: AnalysisCheckKey,
-  percentile: number = ANALYSIS_PERCENTILE,
-): number | null {
-  const values = (rows || [])
-    .map((row) => Number(row[key] ?? 0))
-    .filter((value) => Number.isFinite(value))
-    .sort((a, b) => a - b)
-
-  if (!values.length) return null
-
-  const index = Math.max(0, Math.ceil(values.length * percentile) - 1)
-  return values[index] ?? null
-}
-
-function buildAnalysisThresholds(
-  rows: NormalizedPerformance[] | null | undefined,
-): AnalysisThresholds {
-  const nonSuwenRows = (rows || []).filter((row) => row.profession_name !== '素问')
-  const suwenRows = (rows || []).filter((row) => row.profession_name === '素问')
-  const jiulingRows = (rows || []).filter((row) => row.profession_name === '九灵')
-  const tieyiRows = (rows || []).filter((row) => row.profession_name === '铁衣')
-
-  const suwenHealingBase = computeNearestRankThreshold(
-    suwenRows,
-    'healing_amount',
-    SUWEN_ANALYSIS_PERCENTILE,
-  )
-
-  return {
-    global: {
-      kills: computeNearestRankThreshold(nonSuwenRows, 'kills'),
-      damage_to_players: computeNearestRankThreshold(nonSuwenRows, 'damage_to_players'),
-      damage_to_structures: computeNearestRankThreshold(nonSuwenRows, 'damage_to_structures'),
-    },
-    suwen: {
-      healing_amount:
-        suwenHealingBase == null ? null : suwenHealingBase * SUWEN_THRESHOLD_MULTIPLIER,
-    },
-    jiuling: {
-      skill_qingdeng: computeNearestRankThreshold(jiulingRows, 'skill_qingdeng'),
-    },
-    tieyi: {
-      control_count: computeNearestRankThreshold(tieyiRows, 'control_count'),
-    },
-  }
-}
-
-function getThresholdForCheck(
-  checkKey: AnalysisCheckKey,
-  thresholds: AnalysisThresholds,
-): number | null | undefined {
-  if (checkKey === 'healing_amount') return thresholds.suwen.healing_amount
-  if (checkKey === 'skill_qingdeng') return thresholds.jiuling.skill_qingdeng
-  if (checkKey === 'control_count') return thresholds.tieyi.control_count
-  return thresholds.global[checkKey]
 }
 
 function analyzePerformances(
@@ -973,118 +718,17 @@ const showNestedTabs = computed<boolean>(() =>
   activeSubTab.value.startsWith('leader-') || activeSubTab.value.startsWith('prof-'),
 )
 
-const aggregatedPerformances = computed<AggregatedPerformanceRow[]>(() => {
-  const map = new Map<string | null, Omit<AggregatedPerformanceRow, 'total_damage' | 'kda' | 'damage_per_kill' | 'avg_total_combat_power'>>()
-
-  sortedRaw.value.forEach((p) => {
-    const key = p.leader_nick
-
-    if (!map.has(key)) {
-      map.set(key, {
-        leader_nick: key,
-        total_combat_power: 0,
-        total_count: 0,
-        kills: 0,
-        assists: 0,
-        damage_to_players: 0,
-        damage_to_structures: 0,
-        healing_amount: 0,
-        damage_taken: 0,
-        serious_injuries: 0,
-      })
-    }
-
-    const a = map.get(key)
-    if (!a) return
-
-    a.total_count += 1
-    a.kills += p.kills
-    a.assists += p.assists
-    a.damage_to_players += p.damage_to_players
-    a.damage_to_structures += p.damage_to_structures
-    a.healing_amount += p.healing_amount
-    a.damage_taken += p.damage_taken
-    a.serious_injuries += p.serious_injuries
-    a.total_combat_power += p.total_combat_power ?? 0
-  })
-
-  return Array.from(map.values()).map((a) => ({
-    ...a,
-    total_damage: a.damage_to_players + a.damage_to_structures,
-    kda: a.kills / Math.max(a.serious_injuries, 1),
-    damage_per_kill: a.damage_to_players / Math.max(a.kills, 1),
-    avg_total_combat_power: a.total_combat_power / a.total_count,
-  }))
-})
+const aggregatedPerformances = computed<AggregatedPerformanceRow[]>(() => 
+  buildLeaderAggregation(sortedRaw.value),
+)
 
 const sortedAggregated = computed<AggregatedPerformanceRow[]>(() =>
   aggregatedSort.sortRows(aggregatedPerformances.value),
 )
 
-const profAggregated = computed<ProfessionAggregatedRow[]>(() => {
-  const map = new Map<
-    string | null,
-    Omit<
-      ProfessionAggregatedRow,
-      | 'avg_kills'
-      | 'avg_assists'
-      | 'avg_damage_to_players'
-      | 'avg_damage_to_structures'
-      | 'avg_healing_amount'
-      | 'avg_damage_taken'
-      | 'avg_serious_injuries'
-      | 'avg_control_count'
-      | 'avg_total_combat_power'
-    >
-  >()
-
-  sortedRaw.value.forEach((p) => {
-    const key = p.profession_name
-
-    if (!map.has(key)) {
-      map.set(key, {
-        profession_name: key,
-        total_combat_power: 0,
-        total_count: 0,
-        kills: 0,
-        assists: 0,
-        damage_to_players: 0,
-        damage_to_structures: 0,
-        healing_amount: 0,
-        damage_taken: 0,
-        serious_injuries: 0,
-        control_count: 0,
-      })
-    }
-
-    const a = map.get(key)
-    if (!a) return
-
-    a.total_count += 1
-    a.kills += p.kills
-    a.assists += p.assists
-    a.damage_to_players += p.damage_to_players
-    a.damage_to_structures += p.damage_to_structures
-    a.healing_amount += p.healing_amount
-    a.damage_taken += p.damage_taken
-    a.serious_injuries += p.serious_injuries
-    a.control_count += p.control_count
-    a.total_combat_power += p.total_combat_power ?? 0
-  })
-
-  return Array.from(map.values()).map((a) => ({
-    ...a,
-    avg_kills: a.kills / a.total_count,
-    avg_assists: a.assists / a.total_count,
-    avg_damage_to_players: a.damage_to_players / a.total_count,
-    avg_damage_to_structures: a.damage_to_structures / a.total_count,
-    avg_healing_amount: a.healing_amount / a.total_count,
-    avg_damage_taken: a.damage_taken / a.total_count,
-    avg_serious_injuries: a.serious_injuries / a.total_count,
-    avg_control_count: a.control_count / a.total_count,
-    avg_total_combat_power: a.total_combat_power / a.total_count,
-  }))
-})
+const profAggregated = computed<ProfessionAggregatedRow[]>(() => 
+  buildProfessionAggregations(sortedRaw.value),
+)
 
 const sortedProfAggregated = computed<ProfessionAggregatedRow[]>(() =>
   professionSort.sortRows(profAggregated.value),
@@ -1125,27 +769,6 @@ const barMaxMap = computed<Record<BarKey, number>>(() => {
 
   return m
 })
-
-const BAR_COLORS = {
-  red: 'rgba(255,65,65,0.4)',
-  blue: 'rgba(24,97,255,0.25)',
-  green: 'rgba(66,255,36,0.50)',
-  yellow: 'rgba(255,184,23,0.40)',
-} as const
-
-const redKeys = new Set<BarKey>([
-  'kda',
-  'damage_per_kill',
-  'total_damage',
-  'kills',
-  'assists',
-  'damage_to_players',
-  'damage_to_structures',
-])
-
-const blueKeys = new Set<BarKey>(['war_resources', 'skill_qingdeng', 'control_count'])
-const greenKeys = new Set<BarKey>(['healing_amount', 'skill_huayu'])
-const yellowKeys = new Set<BarKey>(['damage_taken', 'serious_injuries'])
 
 function getFillColor(key: BarKey): string {
   if (redKeys.has(key)) return BAR_COLORS.red

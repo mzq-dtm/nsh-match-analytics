@@ -879,6 +879,12 @@ onBeforeUnmount(() => {
   margin-bottom: 1rem;
 }
 
+.controls select {
+  margin-left: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 1rem;
+}
+
 .outcome-text {
   font-weight: bold;
   color: #333;
@@ -966,6 +972,8 @@ onBeforeUnmount(() => {
   padding: 0.6rem;
   text-align: center;
   white-space: nowrap;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: bold;
 }
 
 .results th {

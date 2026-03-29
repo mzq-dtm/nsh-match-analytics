@@ -509,6 +509,8 @@ watch(
   padding: 0.6rem;
   text-align: center;
   white-space: nowrap;
+  font-family: "Courier New", Courier, monospace;
+  font-weight: bold;
 }
 .results th {
   background: #fafafa;

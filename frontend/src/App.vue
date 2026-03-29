@@ -183,35 +183,4 @@ body {
   height: 100%;
 }
 
-.controls select {
-  margin-left: 0.5rem;
-  padding: 0.4rem 0.6rem;
-  font-size: 1rem;
-}
-
-.results th,
-.results td {
-  border: 1px solid #eee;
-  padding: 0.6rem;
-  text-align: center;
-  white-space: nowrap;
-  font-family: 'Courier New', Courier, monospace;
-  font-weight: bold;
-}
-
-.results th {
-  cursor: pointer;
-}
-
-.results thead {
-  background: #fafafa;
-  font-weight: bold;
-}
-
-.empty,
-.dev-placeholder {
-  padding: 2rem;
-  text-align: center;
-  color: #888;
-}
 </style>

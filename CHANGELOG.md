@@ -20,3 +20,4 @@
 ### Changed
 - 删除联赛数据可视化相关功能
 - 使用 Typescript 重构原有 Javascript 代码
+- 网站下方新增footer

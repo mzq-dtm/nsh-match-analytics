@@ -21,3 +21,11 @@
 - 删除联赛数据可视化相关功能
 - 使用 Typescript 重构原有 Javascript 代码
 - 网站下方新增footer
+
+## [1.2.1] - 2026-04-05
+
+### Fixed
+- 修复了MatchRecords组件里表格高度超出屏幕范围的问题
+- 修复了PlayerHistoryPerformance组件里表格高度超出屏幕范围的问题
+
+

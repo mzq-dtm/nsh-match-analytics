@@ -842,14 +842,17 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .match-records {
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 .data-display {
   width: 100%;
-  height: calc(100% - 34px - 1rem);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
@@ -873,6 +876,7 @@ onBeforeUnmount(() => {
 
 .controls {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   flex-wrap: wrap;
   gap: 0.5rem;
@@ -951,11 +955,18 @@ onBeforeUnmount(() => {
 }
 
 .column-controls {
+  overflow-x: auto;
+  overflow-y: hidden;
   flex: 0 0 auto;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+}
+
+.column-controls label{
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .results {

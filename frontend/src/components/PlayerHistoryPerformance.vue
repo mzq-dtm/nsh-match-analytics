@@ -466,6 +466,7 @@ watch(
 
 <style scoped>
 .controls {
+  flex: 0 0 auto;
   margin-bottom: 1rem;
 }
 .loading {
@@ -473,25 +474,37 @@ watch(
 }
 
 .player-history-performance-container{
+  display: flex;
+  flex-direction: column;
   width: 100%;
   height: 100%;
+  min-height: 0;
 }
 
 .table-with-column-control{
   width: 100%;
-  height: calc(100% - 25px - 1rem);
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
+  min-height: 0;
 }
 .column-controls {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
   gap: 0.5rem;
   margin-bottom: 0.5rem;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.column-controls label{
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .history-table-wrapper {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   overflow: auto;
   min-height: 0;
 }

@@ -65,6 +65,7 @@
             color: getContrastColor(getJobColor(member.job))
           }"
           @dragstart="e => dragStart(e, member, 'list')"
+          @contextmenu.prevent="openJobContextMenu($event, member)"
           @mouseenter="onMouseEnter(member.name)"
           @mousemove="onMouseMove"
           @mouseleave="onMouseLeave"
@@ -108,6 +109,7 @@
                 color: getContrastColor(getJobColor(member.job))
               }"
               @dragstart="e => dragStart(e, member, 'column', idx)"
+              @contextmenu.prevent="openJobContextMenu($event, member)"
               @mouseenter="onMouseEnter(member.name)"
               @mousemove="onMouseMove"
               @mouseleave="onMouseLeave"
@@ -117,6 +119,28 @@
           </div>
         </div>
       </div>
+    </div>
+
+    <!-- 职业修改右键菜单 -->
+    <div
+      v-if="jobMenuVisible"
+      ref="jobContextMenu"
+      class="job-context-menu"
+      :style="{ top: jobMenuPos.y + 'px', left: jobMenuPos.x + 'px' }"
+      @click.stop
+    >
+      <button
+        v-for="job in jobMenuOptions"
+        :key="job"
+        type="button"
+        :style="{
+          backgroundColor: getJobColor(job),
+          color: getContrastColor(getJobColor(job))
+        }"
+        @click.stop="changeContextMemberJob(job)"
+      >
+        {{ job }}
+      </button>
     </div>
 
     <!-- 全局浮窗 -->
@@ -195,6 +219,7 @@ import * as XLSX from 'xlsx'
 import { postPlayerHistoryByNames, type PlayerHistoryByName, type PlayerHistoryByNameItem } from '@/api/nsh'
 import { getContrastColor, getJobColor } from '@/utils/color'
 import { formatMatchName } from '@/utils/match'
+import { JOB_COLORS } from '@/constants/profession'
 
 type EmptyHistoryItem = {
   empty: true
@@ -229,6 +254,12 @@ const groupTooltipPos = reactive<TooltipPosition>({ x: 0, y: 0 })
 
 const globalTooltip = ref<HTMLElement | null>(null)
 const groupTooltip = ref<HTMLElement | null>(null)
+
+const jobMenuVisible = ref(false)
+const jobContextMember = ref<Member | null>(null)
+const jobMenuPos = reactive<TooltipPosition>({ x: 0, y: 0 })
+const jobContextMenu = ref<HTMLElement | null>(null)
+const jobMenuOptions = Object.keys(JOB_COLORS)
 
 function keepInsideViewport(
   elRef: { value: HTMLElement | null },
@@ -280,6 +311,79 @@ function onGroupMove(e: MouseEvent): void {
 
 function onGroupLeave(): void {
   hoveredGroup.value = null
+}
+
+function openJobContextMenu(e: MouseEvent, member: Member): void {
+  hoveredMember.value = null
+  hoveredGroup.value = null
+  jobContextMember.value = member
+  jobMenuVisible.value = true
+  keepInsideViewport(jobContextMenu, jobMenuPos, e.clientX, e.clientY)
+}
+
+function closeJobContextMenu(): void {
+  jobMenuVisible.value = false
+  jobContextMember.value = null
+}
+
+function onJobContextMenuKeydown(e: KeyboardEvent): void {
+  if (e.key === 'Escape') {
+    closeJobContextMenu()
+  }
+}
+
+function updateMemberJobByName(name: string, job: string): void {
+  members.value.forEach((member) => {
+    if (member.name === name) member.job = job
+  })
+
+  listMembers.value.forEach((member) => {
+    if (member.name === name) member.job = job
+  })
+
+  groups.value.forEach((group) => {
+    group.forEach((member) => {
+      if (member.name === name) member.job = job
+    })
+  })
+}
+
+function refreshJobsAfterMemberJobChange(wasAllSelected: boolean): void {
+  const nextUniqueJobs = buildUniqueJobsFromMembers(members.value)
+
+  uniqueJobs.value = nextUniqueJobs
+
+  if (wasAllSelected) {
+    selectedJobs.value = [...nextUniqueJobs]
+    return
+  }
+
+  selectedJobs.value = selectedJobs.value.filter(
+    (job) => job !== '全体成员' && nextUniqueJobs.includes(job),
+  )
+}
+
+function changeContextMemberJob(job: string): void {
+  const member = jobContextMember.value
+  if (!member) return
+
+  const wasAllSelected = selectedJobs.value.includes('全体成员')
+
+  updateMemberJobByName(member.name, job)
+  refreshJobsAfterMemberJobChange(wasAllSelected)
+  saveCache()
+  closeJobContextMenu()
+}
+
+function buildUniqueJobsFromMembers(sourceMembers: Member[]): string[] {
+  const existingJobs = new Set(
+    sourceMembers.map((member) => member.job).filter(Boolean),
+  )
+
+  return [
+    '全体成员',
+    ...jobMenuOptions.filter((job) => existingJobs.has(job)),
+  ]
 }
 
 const historyData = ref<PlayerHistoryByName>({})
@@ -403,7 +507,7 @@ function handleFileUpload(event: Event): void {
 
     members.value = parsedMembers
     listMembers.value = [...parsedMembers].sort((a, b) => b.totalPower - a.totalPower)
-    uniqueJobs.value = ['全体成员', ...new Set(parsedMembers.map((member) => member.job))]
+    uniqueJobs.value = buildUniqueJobsFromMembers(parsedMembers)
     selectedJobs.value = [...uniqueJobs.value]
     groups.value = [[], [], [], [], []]
 
@@ -844,6 +948,8 @@ onMounted((): void => {
   window.addEventListener('beforeunload', persistOnLeave)
   window.addEventListener('pagehide', persistOnLeave)
   document.addEventListener('visibilitychange', onVisibilityChange)
+  document.addEventListener('click', closeJobContextMenu)
+  document.addEventListener('keydown', onJobContextMenuKeydown)
 })
 
 onBeforeUnmount((): void => {
@@ -851,6 +957,8 @@ onBeforeUnmount((): void => {
   window.removeEventListener('beforeunload', persistOnLeave)
   window.removeEventListener('pagehide', persistOnLeave)
   document.removeEventListener('visibilitychange', onVisibilityChange)
+  document.removeEventListener('click', closeJobContextMenu)
+  document.removeEventListener('keydown', onJobContextMenuKeydown)
 })
 
 </script>
@@ -965,6 +1073,32 @@ onBeforeUnmount((): void => {
   z-index: 1000;
 }
 .group-tooltip .record { font-size: 12px; line-height: 1.4; }
+
+.job-context-menu {
+  position: fixed;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(76px, 1fr));
+  gap: 4px;
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.16);
+  z-index: 1500;
+}
+
+.job-context-menu button {
+  border: 1px solid rgba(0,0,0,0.18);
+  border-radius: 4px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.job-context-menu button:hover {
+  filter: brightness(0.95);
+}
 
 /* 弹窗遮罩 */
 .modal-overlay {

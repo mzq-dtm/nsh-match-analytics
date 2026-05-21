@@ -28,4 +28,7 @@
 - 修复了MatchRecords组件里表格高度超出屏幕范围的问题
 - 修复了PlayerHistoryPerformance组件里表格高度超出屏幕范围的问题
 
+## [1.3.0] - 2026-05-22
 
+### Changed
+- 联赛团队配置：支持修改成员职业

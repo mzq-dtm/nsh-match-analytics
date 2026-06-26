@@ -26,6 +26,8 @@ INSERT OR IGNORE INTO professions (profession_id, profession_name) VALUES
 (2010,'荒羽'),
 (2011,'潮光'),
 (2012,'沧澜'),
-(2013,'云瑶');
+(2013,'云瑶'),
+(2014,'瑶光'),
+(2015,'修罗');
 
 COMMIT;

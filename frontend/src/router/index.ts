@@ -35,6 +35,16 @@ const router = createRouter({
       name: 'help',
       component: HelpPage,
     },
+    {
+      path: '/admin',
+      redirect: '/admin/import',
+    },
+    {
+      path: '/admin/import',
+      name: 'admin-import',
+      component: () => import('@/views/AdminImportPage.vue'),
+      meta: { admin: true },
+    },
   ],
 })
 

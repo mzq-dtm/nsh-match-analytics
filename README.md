@@ -104,12 +104,20 @@ python app.py
 ```
 如果成功启动，说明后端运行正常。
 
+管理员导入服务使用独立端口。在另一个终端中运行：
+```
+cd backend
+source venv/bin/activate
+python admin_app.py
+```
+
 ### 2.3 使用 Gunicorn 部署
 在虚拟环境 venv 中，安装gunicorn
 ```
 pip install gunicorn
 # 测试运行
 venv/bin/gunicorn --workers 4 --bind 127.0.0.1:10290 app:app
+venv/bin/gunicorn --workers 1 --bind 127.0.0.1:10291 admin_app:app
 ```
 
 ### 2.4 使用 systemd 管理服务 

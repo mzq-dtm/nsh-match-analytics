@@ -67,21 +67,6 @@ python insert_home_guild.py
 ``` 
 按照提示输入本帮帮会名。 **如果帮会更名，需要重新插入记录。**
 
-### 1.3 导入一场联赛数据
-**该部分操作须在具有图形界面的电脑上进行**，涉及图形界面的操作。
-```
-python insert_match.py
-```
-在图形界面中依次设置
-- 本帮帮会名
-- 数据库文件
-- 联赛 csv 数据文件
-- 帮会成员信息 csv 文件
-- 联赛胜负信息与备注
-
-点击“导入”即可。导入过程中会提示输入数据库中缺失的玩家 ID。可在游戏中打开玩家详细信息页面查看。
-
-服务稳定运行后，仅需在每场联赛后运行 `insert_match.py` 导入数据并更新服务器上的数据库文件即可实现数据库的更新。
 
 ## 2 后端服务部署
 以下步骤适用于 Ubuntu 服务器
@@ -244,7 +229,6 @@ server {
     location ^~ /admin/ {
         auth_basic           "NSH Admin";
         auth_basic_user_file /etc/nginx/.htpasswd-admin;
-
         try_files $uri $uri/ /index.html;
     }
 

@@ -28,6 +28,10 @@ if not DATABASE_PATH.is_absolute():
 UPLOAD_ROOT = Path(Config.ADMIN_UPLOAD_DIR)
 if not UPLOAD_ROOT.is_absolute():
     UPLOAD_ROOT = (BASE_DIR / UPLOAD_ROOT).resolve()
+
+BACKUP_ROOT = Path(Config.DB_BACKUP_DIR)
+if not BACKUP_ROOT.is_absolute():
+    BACKUP_ROOT = (BASE_DIR / BACKUP_ROOT).resolve()
 PREVIEW_TTL_SECONDS = 60 * 60
 MIN_PLAYER_ID = 2
 MAX_SQLITE_INTEGER = 2**63 - 1
@@ -73,6 +77,10 @@ class ImportValidationError(ValueError):
     """An import error that is safe to show to an administrator."""
 
 
+class DatabaseBackupError(RuntimeError):
+    """Raised when the pre-import database backup cannot be created."""
+
+
 @dataclass
 class PromptItem:
     nickname: str
@@ -96,6 +104,42 @@ def get_db() -> sqlite3.Connection:
 
 def ensure_upload_root() -> None:
     UPLOAD_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+
+def create_database_backup() -> Path:
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    backup_path = BACKUP_ROOT / f"{timestamp}.db"
+    temp_path = BACKUP_ROOT / f".{timestamp}-{secrets.token_hex(8)}.tmp"
+    source_conn: sqlite3.Connection | None = None
+    backup_conn: sqlite3.Connection | None = None
+
+    try:
+        BACKUP_ROOT.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if backup_path.exists():
+            raise DatabaseBackupError("同一时间戳的数据库备份已经存在")
+
+        temp_path.touch(mode=0o600, exist_ok=False)
+        source_conn = sqlite3.connect(DATABASE_PATH, timeout=15)
+        source_conn.execute("PRAGMA query_only = ON")
+        backup_conn = sqlite3.connect(temp_path)
+        source_conn.backup(backup_conn)
+        backup_conn.close()
+        backup_conn = None
+        source_conn.close()
+        source_conn = None
+        temp_path.replace(backup_path)
+        return backup_path
+    except DatabaseBackupError:
+        raise
+    except Exception as exc:
+        raise DatabaseBackupError("无法创建导入前数据库备份") from exc
+    finally:
+        if backup_conn is not None:
+            backup_conn.close()
+        if source_conn is not None:
+            source_conn.close()
+        if temp_path.exists():
+            temp_path.unlink()
 
 
 def cleanup_expired_previews() -> None:
@@ -294,6 +338,28 @@ def collect_prompts(
                 )
             )
     return prompts
+
+
+def get_database_revision(cursor: sqlite3.Cursor) -> dict[str, int | str | None]:
+    row = cursor.execute(
+        """
+        SELECT COUNT(*) AS match_count,
+               MAX(match_id) AS latest_match_id,
+               MAX(match_time) AS latest_match_time
+          FROM matches
+        """
+    ).fetchone()
+    return {
+        "match_count": int(row["match_count"]),
+        "latest_match_id": (
+            int(row["latest_match_id"]) if row["latest_match_id"] is not None else None
+        ),
+        "latest_match_time": (
+            str(row["latest_match_time"])
+            if row["latest_match_time"] is not None
+            else None
+        ),
+    }
 
 
 def validate_database_state(
@@ -608,6 +674,12 @@ def handle_validation_error(error: ImportValidationError):
     return jsonify({"error": str(error)}), 400
 
 
+@app.errorhandler(DatabaseBackupError)
+def handle_backup_error(error: DatabaseBackupError):
+    app.logger.exception("Database backup failed", exc_info=error)
+    return jsonify({"error": "数据库备份失败，导入已经取消，请检查服务日志"}), 500
+
+
 @app.errorhandler(413)
 def handle_too_large(_error):
     return jsonify({"error": "上传文件过大，单次请求不能超过 16MB"}), 413
@@ -675,7 +747,10 @@ def preview_import():
         )
         conn = get_db()
         try:
-            _, _, prompts = validate_database_state(conn.cursor(), prepared, target_guild)
+            conn.execute("BEGIN")
+            cursor = conn.cursor()
+            database_revision = get_database_revision(cursor)
+            _, _, prompts = validate_database_state(cursor, prepared, target_guild)
         finally:
             conn.close()
 
@@ -684,6 +759,7 @@ def preview_import():
             "original_filename": Path(match_file.filename).name,
             "target_guild": target_guild,
             "match_name": prepared["match_name"],
+            "database_revision": database_revision,
         }
         write_metadata(stage_dir, metadata)
     except Exception:
@@ -731,12 +807,20 @@ def commit_import():
     conn = get_db()
     try:
         conn.execute("BEGIN IMMEDIATE")
+        cursor = conn.cursor()
+        preview_revision = metadata.get("database_revision")
+        if not isinstance(preview_revision, dict):
+            raise ImportValidationError("预检版本已经失效，请重新上传并预检")
+        if get_database_revision(cursor) != preview_revision:
+            raise ImportValidationError("预检后数据库已经发生变化，请重新上传并预检")
+
         guild_id, profession_map, prompts = validate_database_state(
-            conn.cursor(), prepared, metadata["target_guild"]
+            cursor, prepared, metadata["target_guild"]
         )
         resolutions = parse_resolutions(payload, prompts)
+        create_database_backup()
         match_id, home_count, opponent_count = insert_import(
-            conn.cursor(),
+            cursor,
             prepared,
             metadata["target_guild"],
             outcome,

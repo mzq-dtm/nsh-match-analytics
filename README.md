@@ -113,17 +113,21 @@ python admin_app.py
 
 管理员网页只允许按时间顺序导入更新的比赛。上传文件中的比赛时间必须严格晚于数据库中已有的最新比赛时间；更早或相同时间的比赛会在预检时被拒绝，并在最终提交时再次校验。
 
+每次最终写入前，管理员服务都会在 `Config.DB_BACKUP_DIR` 指定的目录中创建数据库备份，文件名格式为 `YYYY-MM-DD_HH-MM-SS.db`。部署时请确保该目录存在，并且管理服务运行用户具有写入权限。
+
 ### 2.3 使用 Gunicorn 部署
 在虚拟环境 venv 中，安装gunicorn
 ```
 pip install gunicorn
-# 测试运行
+# 在第一个终端测试普通后端
 venv/bin/gunicorn --workers 4 --bind 127.0.0.1:10290 app:app
+
+# 在第二个终端测试管理员导入后端
 venv/bin/gunicorn --workers 1 --bind 127.0.0.1:10291 admin_app:app
 ```
 
 ### 2.4 使用 systemd 管理服务 
-创建服务文件:
+创建普通后端服务文件：
 ```
 /etc/systemd/system/nsh_backend.service
 ```
@@ -144,18 +148,43 @@ Restart=always
 [Install]
 WantedBy=multi-user.target
 ```
-根据实际路径修改：
+
+创建管理员导入服务文件：
+```
+/etc/systemd/system/nsh_admin.service
+```
+内容示例：
+```
+[Unit]
+Description=NSH Admin Import Flask App
+After=network.target
+
+[Service]
+Group=www-data
+WorkingDirectory=/root/nsh-match-analytics/backend
+Environment="PATH=/root/nsh-match-analytics/backend/venv/bin"
+ExecStart=/root/nsh-match-analytics/backend/venv/bin/gunicorn \
+  --workers 1 --bind 127.0.0.1:10291 admin_app:app
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+两个服务文件都需要根据实际路径修改：
 - `WorkingDirectory`
 - `Environment`
 - `ExecStart`
 
-启动服务
+启动两个服务：
 ```
 sudo systemctl daemon-reload
-sudo systemctl enable nsh_backend
-sudo systemctl start nsh_backend
-# 检查状态
+sudo systemctl enable nsh_backend nsh_admin
+sudo systemctl start nsh_backend nsh_admin
+
+# 分别检查状态
 sudo systemctl status nsh_backend
+sudo systemctl status nsh_admin
 ```
 
 ## 3 前端部署

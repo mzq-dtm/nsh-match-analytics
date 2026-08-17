@@ -25,6 +25,8 @@
         清除标记
       </button>
 
+      <a class="import-btn" href="/admin/import">导入数据</a>
+
       <span v-if="selectedMatch && matchNote" class="match-note">
         备注：{{ matchNote }}
       </span>
@@ -1018,6 +1020,21 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   cursor: pointer;
   color: #fff;
+}
+
+.import-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #8e44ad;
+  background: #8e44ad;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.import-btn:hover {
+  background: #7d3c98;
+  border-color: #7d3c98;
 }
 
 .toggle-side-btn {

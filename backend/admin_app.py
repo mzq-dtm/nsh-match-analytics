@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 import secrets
 import shutil
 import sqlite3
-import tempfile
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime
@@ -27,12 +25,9 @@ DATABASE_PATH = Path(Config.DATABASE)
 if not DATABASE_PATH.is_absolute():
     DATABASE_PATH = (BASE_DIR / DATABASE_PATH).resolve()
 
-UPLOAD_ROOT = Path(
-    os.environ.get(
-        "NSH_ADMIN_UPLOAD_DIR",
-        str(Path(tempfile.gettempdir()) / "nsh-match-admin-imports"),
-    )
-)
+UPLOAD_ROOT = Path(Config.ADMIN_UPLOAD_DIR)
+if not UPLOAD_ROOT.is_absolute():
+    UPLOAD_ROOT = (BASE_DIR / UPLOAD_ROOT).resolve()
 PREVIEW_TTL_SECONDS = 60 * 60
 MIN_PLAYER_ID = 2
 MAX_SQLITE_INTEGER = 2**63 - 1
@@ -308,6 +303,25 @@ def validate_database_state(
         "SELECT 1 FROM matches WHERE match_name = ?", (prepared["match_name"],)
     ).fetchone():
         raise ImportValidationError(f"比赛“{prepared['match_name']}”已经导入")
+
+    latest_match_row = cursor.execute(
+        "SELECT MAX(match_time) AS latest_match_time FROM matches"
+    ).fetchone()
+    latest_match_value = (
+        latest_match_row["latest_match_time"] if latest_match_row else None
+    )
+    if latest_match_value:
+        try:
+            latest_match_time = datetime.fromisoformat(latest_match_value)
+        except (TypeError, ValueError) as exc:
+            raise ImportValidationError("数据库中的最新比赛时间格式无效") from exc
+
+        if prepared["match_time"] <= latest_match_time:
+            raise ImportValidationError(
+                "只能按时间顺序导入更新的比赛："
+                f"本次比赛时间为 {prepared['match_time'].isoformat(sep=' ')}，"
+                f"数据库最新比赛时间为 {latest_match_time.isoformat(sep=' ')}"
+            )
 
     guild_row = cursor.execute(
         "SELECT guild_id FROM guilds WHERE guild_name = ?", (target_guild,)

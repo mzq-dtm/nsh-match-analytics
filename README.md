@@ -111,6 +111,8 @@ source venv/bin/activate
 python admin_app.py
 ```
 
+管理员网页只允许按时间顺序导入更新的比赛。上传文件中的比赛时间必须严格晚于数据库中已有的最新比赛时间；更早或相同时间的比赛会在预检时被拒绝，并在最终提交时再次校验。
+
 ### 2.3 使用 Gunicorn 部署
 在虚拟环境 venv 中，安装gunicorn
 ```

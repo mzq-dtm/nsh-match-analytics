@@ -1,7 +1,7 @@
 <template>
   <div id="app">
     <div class="tab-container">
-      <div class="tab-header">
+      <div v-if="!route.meta.admin" class="tab-header">
         <RouterLink
           v-for="tab in tabs"
           :key="tab.to"
@@ -26,7 +26,10 @@
 </template>
 
 <script setup lang="ts">
+import { useRoute } from 'vue-router'
 import AppFooter from '@/components/AppFooter.vue'
+
+const route = useRoute()
 
 const tabs = [
   { to: '/match', label: '联赛数据' },

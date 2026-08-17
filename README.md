@@ -188,8 +188,10 @@ server {
     # 如果有域名请改为你的域名，否则可留成 "_"，表示所有未匹配 server_name
     server_name _;
 
-    auth_basic           "请输入用户名和密码";
-    auth_basic_user_file /etc/nginx/.htpasswd;
+    # 普通页面和只读 API 默认使用普通用户鉴权。
+    # 管理员账号也应加入此文件，确保管理员返回普通页面时无需重新登录。
+    auth_basic           "NSH Viewer";
+    auth_basic_user_file /etc/nginx/.htpasswd-viewer;
 
     root /var/www/nsh_frontend;
     index index.html;
@@ -200,6 +202,33 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # 防止精确访问 /admin 时落入普通前端 location。
+    location = /admin {
+        return 301 /admin/;
+    }
+
+    # 管理员前端页面。Vue Router 会继续跳转到 /admin/import。
+    location ^~ /admin/ {
+        auth_basic           "NSH Admin";
+        auth_basic_user_file /etc/nginx/.htpasswd-admin;
+
+        try_files $uri $uri/ /index.html;
+    }
+
+    # 管理员写入 API。proxy_pass 不带结尾斜杠，以保留完整的
+    # /admin-api/... 路径，与 admin_app.py 中的路由保持一致。
+    location ^~ /admin-api/ {
+        auth_basic           "NSH Admin";
+        auth_basic_user_file /etc/nginx/.htpasswd-admin;
+
+        client_max_body_size 16m;
+        proxy_pass http://127.0.0.1:10291;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Admin-User $remote_user;
     }
 
     # 对于前端路由，所有路径都返回 index.html
@@ -227,10 +256,15 @@ sudo rm /etc/nginx/sites-enabled/default
 ```
 sudo apt update
 sudo apt install apache2-utils
-# 创建密码文件
-sudo htpasswd -c /etc/nginx/.htpasswd XXX
-# 修改用户密码
-sudo htpasswd /etc/nginx/.htpasswd XXX
+# 创建普通用户密码文件
+sudo htpasswd -c /etc/nginx/.htpasswd-viewer 普通用户名
+
+# 将管理员加入普通用户密码文件，使管理员也能访问普通页面
+sudo htpasswd /etc/nginx/.htpasswd-viewer 管理员用户名
+
+# 创建管理员专用密码文件
+# 这里应为同一个管理员账号设置相同密码
+sudo htpasswd -c /etc/nginx/.htpasswd-admin 管理员用户名
 ```
 
 # License

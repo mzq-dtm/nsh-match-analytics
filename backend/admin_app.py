@@ -34,6 +34,8 @@ UPLOAD_ROOT = Path(
     )
 )
 PREVIEW_TTL_SECONDS = 60 * 60
+MIN_PLAYER_ID = 2
+MAX_SQLITE_INTEGER = 2**63 - 1
 
 REQUIRED_MATCH_COLUMNS = [
     "帮会名",
@@ -426,16 +428,28 @@ def parse_resolutions(payload: Any, prompts: list[PromptItem]) -> dict[str, int]
     resolutions: dict[str, int] = {}
     for prompt in prompts:
         value = raw.get(prompt.nickname)
-        if isinstance(value, bool):
-            value = None
-        try:
-            player_id = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ImportValidationError(f"请填写“{prompt.nickname}”的数字玩家 ID") from exc
-        if player_id < 0 or (player_id == 0 and prompt.nickname != "无"):
-            raise ImportValidationError(f"“{prompt.nickname}”的玩家 ID 无效")
+        if not isinstance(value, str):
+            raise ImportValidationError(f"“{prompt.nickname}”的玩家 ID 必须以字符串提交")
+
+        normalized = value.strip()
+        if not normalized or not normalized.isascii() or not normalized.isdigit():
+            raise ImportValidationError(f"“{prompt.nickname}”的玩家 ID 必须是纯数字")
+
+        player_id = int(normalized)
+        if not MIN_PLAYER_ID <= player_id <= MAX_SQLITE_INTEGER:
+            raise ImportValidationError(
+                f"“{prompt.nickname}”的玩家 ID 必须在 "
+                f"{MIN_PLAYER_ID} 到 {MAX_SQLITE_INTEGER} 之间"
+            )
         resolutions[prompt.nickname] = player_id
     return resolutions
+
+
+def serialize_prompt(prompt: PromptItem) -> dict[str, Any]:
+    data = asdict(prompt)
+    if prompt.existing_id is not None:
+        data["existing_id"] = str(prompt.existing_id)
+    return data
 
 
 def insert_import(
@@ -616,15 +630,11 @@ def health():
 def preview_import():
     cleanup_expired_previews()
     target_guild = request.form.get("target_guild", "").strip()
-    outcome = request.form.get("home_outcome", "").strip()
-    note = request.form.get("note", "").strip()
     match_file = request.files.get("match_file")
     personal_file = request.files.get("personal_file")
 
     if not target_guild:
         raise ImportValidationError("本帮帮会名不能为空")
-    if outcome not in {"win", "lose"}:
-        raise ImportValidationError("请选择本帮胜负")
     if not match_file or not match_file.filename:
         raise ImportValidationError("请选择联赛数据 CSV")
     if not personal_file or not personal_file.filename:
@@ -659,8 +669,6 @@ def preview_import():
             "created_at": datetime.now().isoformat(),
             "original_filename": Path(match_file.filename).name,
             "target_guild": target_guild,
-            "home_outcome": outcome,
-            "note": note,
             "match_name": prepared["match_name"],
         }
         write_metadata(stage_dir, metadata)
@@ -678,7 +686,7 @@ def preview_import():
             "opponent_guild": prepared["opponent_guild"],
             "home_count": len(prepared["home_rows"]),
             "opponent_count": len(prepared["opponent_rows"]),
-            "prompt_items": [asdict(prompt) for prompt in prompts],
+            "prompt_items": [serialize_prompt(prompt) for prompt in prompts],
         }
     )
 
@@ -688,6 +696,14 @@ def commit_import():
     cleanup_expired_previews()
     payload = request.get_json(silent=True) or {}
     token = str(payload.get("token", ""))
+    outcome = str(payload.get("home_outcome", "")).strip()
+    note_value = payload.get("note", "")
+    if outcome not in {"win", "lose"}:
+        raise ImportValidationError("请选择本帮胜负")
+    if not isinstance(note_value, str):
+        raise ImportValidationError("备注必须是文本")
+    note = note_value.strip()
+
     stage_dir, metadata = load_stage(token)
     prepared = prepare_import(
         stage_dir / "match.csv",
@@ -709,8 +725,8 @@ def commit_import():
             conn.cursor(),
             prepared,
             metadata["target_guild"],
-            metadata["home_outcome"],
-            metadata["note"],
+            outcome,
+            note,
             guild_id,
             profession_map,
             prompts,

@@ -14,7 +14,7 @@
       <form class="upload-form" @submit.prevent="runPreview">
         <label class="field">
           <span>本帮帮会名</span>
-          <input v-model.trim="targetGuild" required :disabled="isBusy" />
+          <input v-model.trim="targetGuild" required :disabled="isBusy || !!preview" />
         </label>
 
         <fieldset class="outcome-field" :disabled="isBusy">
@@ -35,10 +35,12 @@
             type="file"
             accept=".csv,text/csv"
             required
-            :disabled="isBusy"
+            :disabled="isBusy || !!preview"
             @change="matchFile = getSelectedFile($event)"
           />
-          <small>文件名必须包含 YYYY_MM_DD_HH_MM_SS 时间戳。</small>
+          <small>
+            文件名必须包含 YYYY_MM_DD_HH_MM_SS 时间戳；预检后如需更换，请先清空。
+          </small>
         </label>
 
         <label class="file-field">
@@ -48,14 +50,18 @@
             type="file"
             accept=".csv,text/csv"
             required
-            :disabled="isBusy"
+            :disabled="isBusy || !!preview"
             @change="personalFile = getSelectedFile($event)"
           />
-          <small>用于补充装评、修为、修炼和总战力。</small>
+          <small>用于补充装评、修为、修炼和总战力；预检后如需更换，请先清空。</small>
         </label>
 
         <div class="form-actions field-wide">
-          <button class="primary-button" type="submit" :disabled="isBusy || !canPreview">
+          <button
+            class="primary-button"
+            type="submit"
+            :disabled="isBusy || !!preview || !canPreview"
+          >
             {{ previewing ? '正在预检…' : '预检数据' }}
           </button>
           <button type="button" class="secondary-button" :disabled="isBusy" @click="resetPage">
@@ -191,8 +197,6 @@ async function runPreview(): Promise<void> {
 
   const formData = new FormData()
   formData.append('target_guild', targetGuild.value)
-  formData.append('home_outcome', homeOutcome.value)
-  formData.append('note', note.value)
   formData.append('match_file', matchFile.value)
   formData.append('personal_file', personalFile.value)
 
@@ -218,10 +222,15 @@ async function commitImport(): Promise<void> {
   committing.value = true
 
   try {
-    const numericIds = Object.fromEntries(
-      Object.entries(playerIds.value).map(([nickname, id]) => [nickname, Number(id)]),
+    const submittedIds = Object.fromEntries(
+      Object.entries(playerIds.value).map(([nickname, id]) => [nickname, id.trim()]),
     )
-    const result = await commitMatchImport(preview.value.token, numericIds)
+    const result = await commitMatchImport(
+      preview.value.token,
+      submittedIds,
+      homeOutcome.value,
+      note.value,
+    )
     successMessage.value = `导入成功：${result.match_name}，本帮 ${result.home_count} 条，对方 ${result.opponent_count} 条。`
     preview.value = null
     playerIds.value = {}

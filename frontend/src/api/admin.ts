@@ -1,7 +1,7 @@
 export interface ImportPromptItem {
   nickname: string
   reason: 'not_found' | 'inactive'
-  existing_id: number | null
+  existing_id: string | null
   last_time: string | null
   days_diff: number | null
 }
@@ -43,12 +43,19 @@ export async function previewMatchImport(formData: FormData): Promise<ImportPrev
 
 export async function commitMatchImport(
   token: string,
-  playerIds: Record<string, number>,
+  playerIds: Record<string, string>,
+  homeOutcome: 'win' | 'lose',
+  note: string,
 ): Promise<ImportCommitResult> {
   const response = await fetch('/admin-api/import/commit', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ token, player_ids: playerIds }),
+    body: JSON.stringify({
+      token,
+      player_ids: playerIds,
+      home_outcome: homeOutcome,
+      note,
+    }),
   })
   return parseResponse<ImportCommitResult>(response)
 }

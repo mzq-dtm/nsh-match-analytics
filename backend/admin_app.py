@@ -8,6 +8,7 @@ import secrets
 import shutil
 import sqlite3
 import time
+import unicodedata
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -35,6 +36,7 @@ if not BACKUP_ROOT.is_absolute():
 PREVIEW_TTL_SECONDS = 60 * 60
 MIN_PLAYER_ID = 2
 MAX_SQLITE_INTEGER = 2**63 - 1
+INVALID_TEXT_CATEGORIES = {"Cc", "Cf", "Cs"}
 
 REQUIRED_MATCH_COLUMNS = [
     "帮会名",
@@ -186,6 +188,21 @@ def clean_match_dataframe(df: pd.DataFrame) -> pd.DataFrame:
     return cleaned
 
 
+def validate_import_text(value: Any, field_name: str, max_length: int) -> None:
+    text = str(value).strip()
+    if not text:
+        raise ImportValidationError(f"{field_name}不能为空")
+    if len(text) > max_length:
+        raise ImportValidationError(f"{field_name}不能超过 {max_length} 个字符")
+    if any(
+        char in "<>" or unicodedata.category(char) in INVALID_TEXT_CATEGORIES
+        for char in text
+    ):
+        raise ImportValidationError(
+            f"{field_name}包含非法字符，不允许使用尖括号、控制字符或不可见格式字符"
+        )
+
+
 def parse_required_int(value: Any, field_name: str) -> int:
     text = str(value).strip()
     try:
@@ -221,6 +238,16 @@ def prepare_import(
     require_columns(match_df, REQUIRED_MATCH_COLUMNS, "联赛数据文件")
     match_df = clean_match_dataframe(match_df)
 
+    validate_import_text(target_guild, "本帮帮会名", 100)
+    for row_index, row in match_df.iterrows():
+        line_number = int(row_index) + 2
+        validate_import_text(row["帮会名"], f"联赛数据第 {line_number} 行的帮会名", 100)
+        validate_import_text(row["玩家"], f"联赛数据第 {line_number} 行的玩家昵称", 64)
+        validate_import_text(row["职业"], f"联赛数据第 {line_number} 行的职业", 50)
+        validate_import_text(
+            row["所在团长"], f"联赛数据第 {line_number} 行的团长昵称", 64
+        )
+
     personal_df = read_csv(personal_path, "帮会成员文件")
     require_columns(personal_df, REQUIRED_PERSONAL_COLUMNS, "帮会成员文件")
     for column in REQUIRED_PERSONAL_COLUMNS:
@@ -249,19 +276,19 @@ def prepare_import(
     match_name = f"{target_guild}vs{opponent_guild}_{timestamp}.csv"
 
     for _, row in match_df.iterrows():
-        nickname = row["玩家"] or "未命名玩家"
-        if not row["玩家"]:
-            raise ImportValidationError("联赛数据中存在空玩家昵称")
-        if not row["所在团长"]:
-            raise ImportValidationError(f"{nickname}的团长昵称为空")
+        nickname = row["玩家"]
         for column in MATCH_STAT_COLUMNS:
             parse_required_int(row[column], f"{nickname}的{column}")
 
     extra_map: dict[str, dict[str, str]] = {}
-    for _, row in personal_df.iterrows():
+    for row_index, row in personal_df.iterrows():
         nickname = row["名称"]
         if not nickname:
             continue
+        line_number = int(row_index) + 2
+        validate_import_text(
+            nickname, f"帮会成员数据第 {line_number} 行的玩家昵称", 64
+        )
         for column in REQUIRED_PERSONAL_COLUMNS[1:]:
             parse_optional_int(row[column], f"{nickname}的{column}")
         extra_map[nickname] = row.to_dict()

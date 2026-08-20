@@ -134,6 +134,22 @@ export interface CachedMatchResult {
   note: string
 }
 
+export interface GuildMatchStatistics {
+  participantCount: number
+  totalCombatPower: number | null
+  totalDamageToPlayers: number
+  totalDamageToStructures: number
+  totalKills: number
+  kd: number
+  totalHealing: number
+  totalHuayu: number
+  totalQingdeng: number
+  totalControl: number
+  totalWarResources: number
+}
+
+export type GuildMatchStatisticKey = keyof GuildMatchStatistics
+
 export type BarKey =
   | 'kda'
   | 'damage_per_kill'

@@ -13,6 +13,14 @@
 
       <span v-if="selectedMatch" class="outcome-text">{{ matchOutcomeText }}</span>
 
+      <button
+        class="comparison-btn"
+        :disabled="!selectedMatch"
+        @click="openComparisonModal"
+      >
+        敌我统计对比
+      </button>
+
       <button class="toggle-side-btn" :disabled="!selectedMatch" @click="toggleViewSide">
         {{ isAwayView ? '显示本帮数据' : '显示对手数据' }}
       </button>
@@ -175,6 +183,17 @@
       </div>
     </div>
 
+    <GuildStatsComparison
+      v-if="showComparisonModal"
+      :home-guild-name="comparisonGuildNames.home"
+      :away-guild-name="comparisonGuildNames.away"
+      :home-rows="comparisonHomePerformances"
+      :away-rows="comparisonAwayPerformances"
+      :loading="comparisonLoading"
+      :error-message="comparisonError"
+      @close="closeComparisonModal"
+    />
+
     <div
       v-if="showAnalysisModal"
       ref="analysisModalOverlayRef"
@@ -241,6 +260,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import StatTable from '@/components/table/StatTable.vue'
+import GuildStatsComparison from '@/features/match-records/components/GuildStatsComparison.vue'
 import {
   getMatches,
   getMatchResult,
@@ -249,7 +269,7 @@ import {
   type MatchItem,
   type MatchResult,
 } from '@/api/nsh'
-import {formatMatchName} from '@/utils/match'
+import {extractMatchGuildNames, formatMatchName} from '@/utils/match'
 import {getContrastColor, getJobColor} from '@/utils/color'
 import {useTableSort} from '@/composables/table/useTableSort'
 import {useVisibleColumns} from '@/composables/table/useVisibleColumns'
@@ -301,6 +321,12 @@ const matchOutcome = ref<MatchResult['home_outcome']>(null)
 const matchNote = ref<string>('')
 const showAnalysisModal = ref<boolean>(false)
 const analysisModalOverlayRef = ref<HTMLElement | null>(null)
+const showComparisonModal = ref<boolean>(false)
+const comparisonLoading = ref<boolean>(false)
+const comparisonError = ref<string>('')
+const comparisonHomePerformances = ref<NormalizedPerformance[]>([])
+const comparisonAwayPerformances = ref<NormalizedPerformance[]>([])
+let comparisonRequestVersion = 0
 
 const subTabs = ref<SubTab[]>([])
 const activeSubTab = ref<string>('all')
@@ -403,6 +429,12 @@ const selectedMatchLabel = computed<string>(() => {
   const matchId = Number(selectedMatch.value)
   const match = matches.value.find((item) => Number(item.match_id) === matchId)
   return match ? formatMatchName(match.match_name) : '未选择联赛'
+})
+
+const comparisonGuildNames = computed(() => {
+  const matchId = Number(selectedMatch.value)
+  const match = matches.value.find((item) => Number(item.match_id) === matchId)
+  return extractMatchGuildNames(match?.match_name)
 })
 
 const analysisPercentLabel = computed<string>(() => `${Math.round(ANALYSIS_PERCENTILE * 100)}%`)
@@ -569,6 +601,17 @@ async function fetchHomeData(matchId: number): Promise<NormalizedPerformance[]> 
   return normalized
 }
 
+async function fetchAwayData(matchId: number): Promise<NormalizedPerformance[]> {
+  if (awayCache.value.has(matchId)) {
+    return awayCache.value.get(matchId) ?? []
+  }
+
+  const rows = await getOpponentPerformances(matchId)
+  const normalized = normalizePerformances(rows, 'away')
+  awayCache.value.set(matchId, normalized)
+  return normalized
+}
+
 async function fetchMatchResult(matchId: number): Promise<CachedMatchResult> {
   if (resultCache.value.has(matchId)) {
     return resultCache.value.get(matchId) ?? { home_outcome: null, note: '' }
@@ -607,13 +650,7 @@ async function toggleViewSide(): Promise<void> {
   const matchId = Number(selectedMatch.value)
 
   if (!isAwayView.value) {
-    const data = awayCache.value.has(matchId)
-      ? (awayCache.value.get(matchId) ?? [])
-      : await getOpponentPerformances(matchId).then((rows) => {
-          const normalized = normalizePerformances(rows, 'away')
-          awayCache.value.set(matchId, normalized)
-          return normalized
-        })
+    const data = await fetchAwayData(matchId)
 
     viewSide.value = 'away'
     applyPerformances(data)
@@ -623,6 +660,39 @@ async function toggleViewSide(): Promise<void> {
   const data = homeCache.value.get(matchId) ?? homePerformances.value
   viewSide.value = 'home'
   applyPerformances(data)
+}
+
+function closeComparisonModal(): void {
+  comparisonRequestVersion += 1
+  showComparisonModal.value = false
+}
+
+async function openComparisonModal(): Promise<void> {
+  if (!selectedMatch.value) return
+
+  const matchId = Number(selectedMatch.value)
+  const requestVersion = ++comparisonRequestVersion
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  comparisonHomePerformances.value = []
+  comparisonAwayPerformances.value = []
+  showComparisonModal.value = true
+
+  try {
+    const [homeData, awayData] = await Promise.all([
+      fetchHomeData(matchId),
+      fetchAwayData(matchId),
+    ])
+    if (requestVersion !== comparisonRequestVersion) return
+
+    comparisonHomePerformances.value = homeData
+    comparisonAwayPerformances.value = awayData
+  } catch (error) {
+    if (requestVersion !== comparisonRequestVersion) return
+    comparisonError.value = error instanceof Error ? error.message : '双方统计数据加载失败'
+  } finally {
+    if (requestVersion === comparisonRequestVersion) comparisonLoading.value = false
+  }
 }
 
 function closeAnalysisModal(): void {
@@ -910,6 +980,15 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.comparison-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #4f6fae;
+  background: #4f6fae;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+}
+
 .sub-tabs {
   flex: 0 0 auto;
   display: flex;
@@ -1048,7 +1127,8 @@ onBeforeUnmount(() => {
 
 .toggle-side-btn:disabled,
 .clear-btn:disabled,
-.analysis-btn:disabled {
+.analysis-btn:disabled,
+.comparison-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

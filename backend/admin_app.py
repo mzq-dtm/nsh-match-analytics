@@ -205,15 +205,23 @@ def validate_import_text(value: Any, field_name: str, max_length: int) -> None:
 
 def parse_required_int(value: Any, field_name: str) -> int:
     text = str(value).strip()
-    try:
-        return int(text)
-    except (TypeError, ValueError) as exc:
-        raise ImportValidationError(f"{field_name}不是合法整数") from exc
+    if not text or not text.isascii() or not text.isdigit():
+        raise ImportValidationError(f"{field_name}必须是仅包含 0-9 的非负整数")
+
+    normalized = text.lstrip("0") or "0"
+    maximum = str(MAX_SQLITE_INTEGER)
+    if len(normalized) > len(maximum) or (
+        len(normalized) == len(maximum) and normalized > maximum
+    ):
+        raise ImportValidationError(
+            f"{field_name}不能超过 {MAX_SQLITE_INTEGER}"
+        )
+    return int(normalized)
 
 
 def parse_optional_int(value: Any, field_name: str) -> int:
-    text = str(value or "").strip()
-    if not text or text.lower() == "nan":
+    text = "" if value is None else str(value).strip()
+    if not text:
         return 0
     return parse_required_int(text, field_name)
 
@@ -239,14 +247,26 @@ def prepare_import(
     match_df = clean_match_dataframe(match_df)
 
     validate_import_text(target_guild, "本帮帮会名", 100)
+    match_player_lines: dict[tuple[str, str], int] = {}
     for row_index, row in match_df.iterrows():
         line_number = int(row_index) + 2
-        validate_import_text(row["帮会名"], f"联赛数据第 {line_number} 行的帮会名", 100)
-        validate_import_text(row["玩家"], f"联赛数据第 {line_number} 行的玩家昵称", 64)
+        guild_name = row["帮会名"]
+        nickname = row["玩家"]
+        validate_import_text(guild_name, f"联赛数据第 {line_number} 行的帮会名", 100)
+        validate_import_text(nickname, f"联赛数据第 {line_number} 行的玩家昵称", 64)
         validate_import_text(row["职业"], f"联赛数据第 {line_number} 行的职业", 50)
         validate_import_text(
             row["所在团长"], f"联赛数据第 {line_number} 行的团长昵称", 64
         )
+
+        player_key = (guild_name, nickname)
+        first_line = match_player_lines.get(player_key)
+        if first_line is not None:
+            raise ImportValidationError(
+                f"联赛数据第 {line_number} 行的玩家“{nickname}”在帮会"
+                f"“{guild_name}”中重复（首次出现于第 {first_line} 行）"
+            )
+        match_player_lines[player_key] = line_number
 
     personal_df = read_csv(personal_path, "帮会成员文件")
     require_columns(personal_df, REQUIRED_PERSONAL_COLUMNS, "帮会成员文件")
@@ -281,6 +301,7 @@ def prepare_import(
             parse_required_int(row[column], f"{nickname}的{column}")
 
     extra_map: dict[str, dict[str, str]] = {}
+    member_nickname_lines: dict[str, int] = {}
     for row_index, row in personal_df.iterrows():
         nickname = row["名称"]
         if not nickname:
@@ -289,6 +310,13 @@ def prepare_import(
         validate_import_text(
             nickname, f"帮会成员数据第 {line_number} 行的玩家昵称", 64
         )
+        first_line = member_nickname_lines.get(nickname)
+        if first_line is not None:
+            raise ImportValidationError(
+                f"帮会成员数据第 {line_number} 行的玩家昵称“{nickname}”重复"
+                f"（首次出现于第 {first_line} 行）"
+            )
+        member_nickname_lines[nickname] = line_number
         for column in REQUIRED_PERSONAL_COLUMNS[1:]:
             parse_optional_int(row[column], f"{nickname}的{column}")
         extra_map[nickname] = row.to_dict()
@@ -538,12 +566,8 @@ def parse_resolutions(payload: Any, prompts: list[PromptItem]) -> dict[str, int]
         if not isinstance(value, str):
             raise ImportValidationError(f"“{prompt.nickname}”的玩家 ID 必须以字符串提交")
 
-        normalized = value.strip()
-        if not normalized or not normalized.isascii() or not normalized.isdigit():
-            raise ImportValidationError(f"“{prompt.nickname}”的玩家 ID 必须是纯数字")
-
-        player_id = int(normalized)
-        if not MIN_PLAYER_ID <= player_id <= MAX_SQLITE_INTEGER:
+        player_id = parse_required_int(value, f"“{prompt.nickname}”的玩家 ID")
+        if player_id < MIN_PLAYER_ID:
             raise ImportValidationError(
                 f"“{prompt.nickname}”的玩家 ID 必须在 "
                 f"{MIN_PLAYER_ID} 到 {MAX_SQLITE_INTEGER} 之间"

@@ -106,7 +106,19 @@
             </thead>
             <tbody>
               <tr v-for="item in preview.prompt_items" :key="item.nickname">
-                <td>{{ item.nickname }}</td>
+                <td>
+                  <span class="nickname-copy">
+                    <span>{{ item.nickname }}</span>
+                    <button
+                      type="button"
+                      class="copy-nickname-button"
+                      :aria-label="`复制玩家昵称 ${item.nickname}`"
+                      @click="copyNickname(item.nickname)"
+                    >
+                      {{ copiedNickname === item.nickname ? '已复制' : '复制' }}
+                    </button>
+                  </span>
+                </td>
                 <td>{{ promptReason(item) }}</td>
                 <td>{{ item.existing_id ?? '—' }}</td>
                 <td>
@@ -166,6 +178,7 @@ const previewing = ref(false)
 const committing = ref(false)
 const errorMessage = ref('')
 const successMessage = ref('')
+const copiedNickname = ref<string | null>(null)
 
 const isBusy = computed(() => previewing.value || committing.value)
 const canPreview = computed(
@@ -185,6 +198,17 @@ function promptReason(item: ImportPromptItem): string {
   return `距上次参赛 ${item.days_diff ?? 0} 天（${item.last_time ?? '未知'}）`
 }
 
+function showCopiedFeedback(nickname: string): void {
+  copiedNickname.value = nickname
+}
+
+async function copyNickname(nickname: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(nickname)
+    showCopiedFeedback(nickname)
+  } catch {}
+}
+
 function clearMessages(): void {
   errorMessage.value = ''
   successMessage.value = ''
@@ -195,6 +219,7 @@ async function runPreview(): Promise<void> {
   clearMessages()
   preview.value = null
   playerIds.value = {}
+  copiedNickname.value = null
   previewing.value = true
 
   const formData = new FormData()
@@ -233,6 +258,7 @@ async function commitImport(): Promise<void> {
     successMessage.value = `导入成功：${result.match_name}，本帮 ${result.home_count} 条，对方 ${result.opponent_count} 条。`
     preview.value = null
     playerIds.value = {}
+    copiedNickname.value = null
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '导入失败'
   } finally {
@@ -244,6 +270,7 @@ function resetPage(): void {
   clearMessages()
   preview.value = null
   playerIds.value = {}
+  copiedNickname.value = null
   note.value = ''
   matchFile.value = null
   personalFile.value = null
@@ -482,6 +509,25 @@ th {
 
 .id-input {
   min-width: 190px;
+}
+
+.nickname-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.copy-nickname-button {
+  border: 1px solid #b8c3bc;
+  padding: 0.16rem 0.42rem;
+  background: #f4f7f5;
+  color: #3f5748;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.copy-nickname-button:hover {
+  background: #e8eeea;
 }
 
 .ready-box {

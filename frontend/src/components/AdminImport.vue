@@ -92,7 +92,7 @@
           <h3>需要确认的玩家 ID</h3>
           <span>{{ preview.prompt_items.length }} 项</span>
         </div>
-        <p class="hint">长期未参赛的玩家已预填原 ID；确认不是同一玩家时请修改。</p>
+        <p class="hint">长期未参赛的玩家会显示原 ID，请核对后手动输入确认后的玩家 ID。</p>
 
         <div class="table-wrap">
           <table>
@@ -206,10 +206,7 @@ async function runPreview(): Promise<void> {
     const result = await previewMatchImport(formData)
     preview.value = result
     playerIds.value = Object.fromEntries(
-      result.prompt_items.map((item) => [
-        item.nickname,
-        item.existing_id == null ? '' : String(item.existing_id),
-      ]),
+      result.prompt_items.map((item) => [item.nickname, '']),
     )
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '预检失败'

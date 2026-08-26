@@ -29,6 +29,14 @@
         自动分析
       </button>
 
+      <button
+        class="report-btn"
+        :disabled="!selectedMatch || isGeneratingReport"
+        @click="downloadTeamReport"
+      >
+        {{ isGeneratingReport ? '正在生成……' : '导出分团数据' }}
+      </button>
+
       <button class="clear-btn" :disabled="!hasHighlights" @click="clearHighlights">
         清除标记
       </button>
@@ -37,6 +45,10 @@
 
       <span v-if="selectedMatch && matchNote" class="match-note">
         备注：{{ matchNote }}
+      </span>
+
+      <span v-if="reportError" class="report-error" role="alert">
+        {{ reportError }}
       </span>
     </div>
 
@@ -274,6 +286,7 @@ import {getContrastColor, getJobColor} from '@/utils/color'
 import {useTableSort} from '@/composables/table/useTableSort'
 import {useVisibleColumns} from '@/composables/table/useVisibleColumns'
 import {useTableHighlight} from '@/composables/table/useTableHighlight'
+import {generateMatchReportImage} from '@/features/match-report/generateMatchReportImage'
 import type {
   AggregatedPerformanceRow,
   AnalysisFailureRow,
@@ -326,6 +339,8 @@ const comparisonLoading = ref<boolean>(false)
 const comparisonError = ref<string>('')
 const comparisonHomePerformances = ref<NormalizedPerformance[]>([])
 const comparisonAwayPerformances = ref<NormalizedPerformance[]>([])
+const isGeneratingReport = ref<boolean>(false)
+const reportError = ref<string>('')
 let comparisonRequestVersion = 0
 
 const subTabs = ref<SubTab[]>([])
@@ -708,6 +723,45 @@ async function openAnalysisModal(): Promise<void> {
   showAnalysisModal.value = true
 }
 
+async function downloadTeamReport(): Promise<void> {
+  if (!selectedMatch.value || isGeneratingReport.value) return
+
+  const matchId = Number(selectedMatch.value)
+  const match = matches.value.find((item) => Number(item.match_id) === matchId)
+  let downloadUrl: string | null = null
+  let downloadLink: HTMLAnchorElement | null = null
+
+  isGeneratingReport.value = true
+  reportError.value = ''
+
+  try {
+    if (!match) throw new Error('未找到所选联赛，请重新选择后再试')
+
+    const {blob, filename} = await generateMatchReportImage({
+      matchId,
+      matchName: match.match_name,
+      homePerformances: homePerformances.value,
+      homeOutcome: matchOutcome.value,
+      note: matchNote.value,
+    })
+
+    downloadUrl = URL.createObjectURL(blob)
+    downloadLink = document.createElement('a')
+    downloadLink.href = downloadUrl
+    downloadLink.download = filename
+    downloadLink.style.display = 'none'
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : ''
+    reportError.value = message || '分团数据图生成失败，请稍后重试'
+  } finally {
+    downloadLink?.remove()
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+    isGeneratingReport.value = false
+  }
+}
+
 function onAnalysisModalDocumentKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') closeAnalysisModal()
 }
@@ -971,6 +1025,11 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.report-error {
+  flex-basis: 100%;
+  color: #c0392b;
+}
+
 .analysis-btn {
   padding: 0.35rem 0.75rem;
   border: 1px solid #e6a23c;
@@ -1092,6 +1151,15 @@ onBeforeUnmount(() => {
   text-underline-offset: 3px;
 }
 
+.report-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #00796b;
+  background: #00796b;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+}
+
 .clear-btn {
   padding: 0.35rem 0.75rem;
   border: 1px solid #409eff;
@@ -1127,6 +1195,7 @@ onBeforeUnmount(() => {
 
 .toggle-side-btn:disabled,
 .clear-btn:disabled,
+.report-btn:disabled,
 .analysis-btn:disabled,
 .comparison-btn:disabled {
   opacity: 0.5;

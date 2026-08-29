@@ -23,6 +23,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false,
       },
+      '/admin-api': {
+        target: 'http://127.0.0.1:10291',
+        changeOrigin: true,
+        secure: false,
+      },
     }
   }
 })

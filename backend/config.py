@@ -7,4 +7,5 @@
 
 class Config:
     DATABASE = "../database/game_league.db"
-
+    ADMIN_UPLOAD_DIR = './tmpfile/'
+    DB_BACKUP_DIR = './backup/'

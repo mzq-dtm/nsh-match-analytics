@@ -16,3 +16,6 @@ dist/
 # sqlite database file
 *.db
 
+# backend temp and backup folder
+backend/tmpfile/
+backend/backup/

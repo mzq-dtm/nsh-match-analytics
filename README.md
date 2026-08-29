@@ -1,229 +1,163 @@
 # nsh-match-analytics
-逆水寒联赛数据综合管理系统
 
-# 项目简介
-nsh-match-analytics 是一个用于管理和分析 **《逆水寒》黄金服端游** 帮会联赛数据的 Web 系统。系统支持导入游戏内导出的联赛 csv 数据，提供数据库管理、数据统计以及网页可视化的展示功能，并附带诸如帮会成员历史数据查询、联赛团队配置等实用工具。
+《逆水寒》端游帮会联赛数据管理与分析系统，支持经典服联赛数据和黄金畅玩服联赛数据。
 
-<p>
-<img src="docs/images/match_table.png" width="19%">
-<img src="docs/images/match_analytic.png" width="19%">
-<img src="docs/images/attendance_table.png" width="19%">
-<img src="docs/images/player_history_table.png" width="19%">
-<img src="docs/images/match_config.png" width="19%">
-</p>
+系统将游戏导出的 CSV 写入 SQLite，提供本帮与对手战绩、敌我统计对比、出勤统计、玩家历史、团队配置，以及带预检、备份和玩家身份确认的管理员网页导入流程。
 
-主要功能包括：
-- “联赛数据”模块可查看每一场联赛所有参与者的战斗数据，包括本帮帮众与对方帮众，显示联赛胜负与额外备注信息，并提供一个简易的数据分析引擎，用于联赛数据分析。联赛数据通过交互式表格的方式呈现。交互式表格支持如下功能：
-  - 可手动勾选控制表格列是否显示；
-  - 战斗数据支持数据条可视化；
-  - 鼠标左键单击表头可对该列进行排序；
-  - 右键单击表头对该列高亮显示；
-  - 右键单击序号对该行高亮显示；
-  - 右键单击单元格对该单元格高亮显示；
-  - 左键单击玩家 ID 或玩家昵称，可查看该玩家参与的所有历史联赛数据。
+## 主要功能
 
-- “帮众出勤分析”模块展示开始日期与结束日期之间，所有玩家的联赛出勤率情况。具体展示如下数据：
-  - 玩家最近一次联赛参与时的总战力；
-  - 联赛出勤率（不显示出勤次数为0的玩家）；
-  - 首次与最后联赛时间；
-  - 统计区间内的联赛战斗数据汇总。
-  - 鼠标左键单击表头可对该列进行排序；
-  - 左键单击玩家 ID 或玩家昵称可查看该玩家参与的所有历史联赛数据。
+- **联赛数据**：查看本帮或对手的单场战绩、胜负和备注，按团或职业汇总，进行敌我统计对比和本帮表现自动分析，并将本帮分团数据导出为团队战报 PNG 长图。
+- **帮众出勤分析**：按日期范围统计出勤率、近期战力、首次/最后参赛时间及累计战斗数据。
+- **帮众数据查询**：按昵称、拼音、拼音首字母或玩家 ID 查找玩家，查看历史表现和单场排名。
+- **联赛团队配置**：读取成员 CSV，筛选和拖放成员、修改职业，并生成分团图片预览或导出电子表格。
+- **管理员网页导入**：识别经典服联赛数据或黄金畅玩服联赛数据，完成玩家身份预检，并在备份后通过事务写入数据库。
 
-- “帮众数据查询”模块展示一个帮众的所有历史联赛数据。首先通过搜索框搜索需要展示历史数据的帮众。搜索框支持关键字、拼音、拼音首字母模糊查找。选择需要展示的帮众后，会展示该帮众所有参与的联赛数据。数据表格支持鼠标左键单击表头进行排序。
+## 文档
 
-- “联赛团队配置”模块方便帮会管理配置各团成员名单。加载帮会成员数据后：
-  - 所有成员默认出现在替补席，可通过职业和评分筛选替补席成员；
-  - 鼠标悬停在替补席成员上可速查该玩家最近三次联赛数据；
-  - 鼠标右键单击成员可以修改成员的职业；
-  - 鼠标左键可在各团队与替补席间拖动帮会成员；
-  - 鼠标悬停在各团顶部名字上可显示团队职业配置；
-  - 单击左侧“保存图片”按钮快速将团队配置导出为图片；
-  - 单击左侧“保存表格”按钮快速将团队配置导出为电子表格。
+- [用户指南](docs/user-guide.md)：页面操作、统计口径和团队配置。
+- [开发与测试指南](docs/development.md)：开发环境、质量检查命令、测试范围和贡献流程。
+- [管理员导入指南](docs/admin-import.md)：CSV 格式、两种导入模式、玩家 ID 和故障处理。
+- [系统架构](docs/architecture.md)：组件边界、数据流、数据模型和核心约束。
+- [API 文档](docs/api.md)：查询 API 与管理员 API 契约。
+- [生产部署指南](docs/deployment.md)：Ubuntu、Gunicorn、Nginx、权限、升级、备份和恢复。
 
-# 技术栈
-**Frontend:** Vue 3, Vite, TypeScript  
-**Backend:** Python, Flask, Gunicorn  
-**Database:** SQLite, Pandas  
-**Deployment:** Nginx, systemd
+## 系统组成
 
-# 快速开始
-按如下步骤操作即可快速上线。
-## 1 数据库
-### 1.1 初始化数据库
-```
-cd database
-pip install -r requirements.txt
-```
-创建数据库：
-```
-sqlite3 game_league.db < schema.sql
-sqlite3 game_league.db < init_data.sql
-```
+| 服务 | 本地默认地址 | 用途 |
+| --- | --- | --- |
+| Vite 开发服务器 | `http://127.0.0.1:5173` | 前端页面，并代理两个后端 |
+| 查询后端 | `http://127.0.0.1:10290` | 只提供查询接口 `/api/*` |
+| 管理员后端 | `http://127.0.0.1:10291` | 提供健康检查及写入接口 `/admin-api/*` |
 
-### 1.2 插入本帮帮会名
-```
-python insert_home_guild.py
-``` 
-按照提示输入本帮帮会名。 **如果帮会更名，需要重新插入记录。**
+生产环境由 Nginx 提供静态文件并代理两个后端。两个 Flask 应用都没有应用层登录功能，10290 和 10291 必须只监听 loopback，不能绕过 Nginx 直接暴露。
 
-### 1.3 导入一场联赛数据
-**该部分操作须在具有图形界面的电脑上进行**，涉及图形界面的操作。
-```
-python insert_match.py
-```
-在图形界面中依次设置
-- 本帮帮会名
-- 数据库文件
-- 联赛 csv 数据文件
-- 帮会成员信息 csv 文件
-- 联赛胜负信息与备注
+当前数据库面向一个逻辑上的本帮及一条全局递增的比赛时间线，不是多租户数据库。不要在同一数据库中混放互不相关的多个本帮数据。详细边界见[系统架构](docs/architecture.md)。
 
-点击“导入”即可。导入过程中会提示输入数据库中缺失的玩家 ID。可在游戏中打开玩家详细信息页面查看。
+## 环境要求
 
-服务稳定运行后，仅需在每场联赛后运行 `insert_match.py` 导入数据并更新服务器上的数据库文件即可实现数据库的更新。
+- Linux、macOS 或 WSL；生产部署指南以 Ubuntu 为例。
+- Python 3.9 或更高版本；CI 使用 Python 3.11。
+- Node.js `^20.19.0`、`^22.13.0` 或 `>=24.0.0`；推荐使用与 CI 一致的 Node.js 24。
+- npm 10 或更高版本。
+- SQLite 3 命令行工具。
 
-## 2 后端服务部署
-以下步骤适用于 Ubuntu 服务器
-### 2.1 系统准备：
-```
-sudo apt update
-sudo apt install -y git curl build-essential
-sudo apt install -y python3 python3-venv python3-pip
+## 本地启动
+
+以下命令均从仓库根目录开始执行。需要一个全新的本地数据库；已有数据库不能执行本节的初始化命令。
+
+### 1. 初始化数据库
+
+下面的代码块必须整体执行。它会拒绝覆盖已有的 `database/game_league.db`，并在初始化结束后检查数据库完整性。
+
+```bash
+(
+  set -eu
+  umask 077
+  cd database
+
+  test ! -e game_league.db
+  sqlite3 game_league.db < schema.sql
+  sqlite3 game_league.db < init_data.sql
+  python3 insert_home_guild.py
+
+  test "$(sqlite3 game_league.db 'PRAGMA quick_check;')" = "ok"
+  test -z "$(sqlite3 game_league.db 'PRAGMA foreign_key_check;')"
+)
 ```
 
-### 2.2 测试运行
-```
+`insert_home_guild.py` 会提示输入本帮名称。这个名称必须与管理员页面填写的名称及 CSV 中的帮会名完全一致。导入格式和名称约束见[管理员导入指南](docs/admin-import.md)。
+
+如果初始化中途失败，先确认 `database/game_league.db` 是本次创建且不包含需要保留的数据，再处理该不完整文件并重新执行；不要对已有数据库反复运行初始化 SQL。
+
+### 2. 安装后端依赖
+
+```bash
 cd backend
 python3 -m venv venv
 source venv/bin/activate
-pip install -U pip
+python -m pip install --upgrade pip
 pip install -r requirements.txt
-# 测试运行前，编辑 `config.py` 确保 `Config.DATABASE` 指向正确的数据库文件
-python app.py
-```
-如果成功启动，说明后端运行正常。
-
-### 2.3 使用 Gunicorn 部署
-在虚拟环境 venv 中，安装gunicorn
-```
-pip install gunicorn
-# 测试运行
-venv/bin/gunicorn --workers 4 --bind 127.0.0.1:10290 app:app
+cd ..
 ```
 
-### 2.4 使用 systemd 管理服务 
-创建服务文件:
-```
-/etc/systemd/system/nsh_backend.service
-```
-内容示例：
-```
-[Unit]
-Description=NSH Backend Flask App
-After=network.target
+默认配置位于 `backend/config.py`：
 
-[Service]
-Group=www-data
-WorkingDirectory=/root/nsh-match-analytics/backend
-Environment="PATH=/root/nsh-match-analytics/backend/venv/bin"
-ExecStart=/root/nsh-match-analytics/backend/venv/bin/gunicorn \
-  --workers 4 --bind 127.0.0.1:10290 app:app
-Restart=always
-
-[Install]
-WantedBy=multi-user.target
-```
-根据实际路径修改：
-- `WorkingDirectory`
-- `Environment`
-- `ExecStart`
-
-启动服务
-```
-sudo systemctl daemon-reload
-sudo systemctl enable nsh_backend
-sudo systemctl start nsh_backend
-# 检查状态
-sudo systemctl status nsh_backend
+```python
+class Config:
+    DATABASE = "../database/game_league.db"
+    ADMIN_UPLOAD_DIR = "./tmpfile/"
+    DB_BACKUP_DIR = "./backup/"
 ```
 
-## 3 前端部署
+当前项目不读取 `.env`。查询后端会相对于进程工作目录解释数据库相对路径，管理员后端会相对于 `backend/` 解释路径，因此请严格按下文从 `backend/` 启动两个进程。生产环境应使用绝对路径。
 
-### 3.1 环境准备
+### 3. 启动两个后端
 
-确保服务器已安装 **nginx** 。
+终端一：
 
-### 3.2 构建前端
+```bash
+cd backend
+venv/bin/gunicorn --workers 1 --bind 127.0.0.1:10290 app:app
 ```
+
+终端二：
+
+```bash
+cd backend
+venv/bin/gunicorn --workers 1 --bind 127.0.0.1:10291 admin_app:app
+```
+
+本地检查：
+
+```bash
+curl -fsS http://127.0.0.1:10290/api/matches
+curl -fsS http://127.0.0.1:10291/admin-api/health
+```
+
+查询接口应返回 JSON 数组；管理员健康接口应返回 `{"status":"ok"}`。健康接口只证明进程能够响应，不检查数据库、上传目录或备份目录。
+
+### 4. 启动前端
+
+终端三：
+
+```bash
 cd frontend
-npm install
+npm ci --include=dev
+npm run dev
+```
+
+访问 `http://127.0.0.1:5173`。Vite 会将 `/api` 代理到 10290，将 `/admin-api` 代理到 10291。
+
+管理员导入页位于 `http://127.0.0.1:5173/admin/import`。本地开发服务器不提供管理员认证，不要将本地服务暴露到不可信网络。
+
+## 开发与质量检查
+
+安装前端依赖时需要保留开发依赖；Vitest、Vite、TypeScript 和 ESLint 都不需要全局安装。提交前可在 `frontend/` 目录依次执行：
+
+```bash
+npm ci --include=dev
+npm run lint
+npm test
+npm run type-check
 npm run build
 ```
 
-### 3.3 复制静态文件到 nginx 目录
-```
-mkdir -p /var/www/nsh_frontend
-cp -r ./dist/* /var/www/nsh_frontend
-chown -R www-data:www-data /var/www/nsh_frontend
+详细的开发环境、命令说明和当前自动化测试边界见[开发与测试指南](docs/development.md)。
+
+## 项目目录
+
+```text
+backend/                 Flask 查询后端、管理员后端和运行配置
+database/                SQLite schema、初始化数据和本帮初始化脚本
+frontend/                Vue 3 单页前端
+docs/user-guide.md       普通用户操作与统计口径
+docs/development.md      开发环境、质量检查与测试边界
+docs/admin-import.md     管理员导入流程与 CSV 契约
+docs/architecture.md     架构、数据流和数据模型
+docs/api.md              HTTP API 契约
+docs/deployment.md       生产部署、升级、备份、恢复和排障
 ```
 
-### 3.4 配置nginx
-创建配置文件：
-```
-/etc/nginx/sites-available/nsh_frontend
-```
-根据实际情况配置。示例配置：
-```
-server {
-    listen 80;
-    # 如果有域名请改为你的域名，否则可留成 "_"，表示所有未匹配 server_name
-    server_name _;
+## License
 
-    auth_basic           "请输入用户名和密码";
-    auth_basic_user_file /etc/nginx/.htpasswd;
-
-    root /var/www/nsh_frontend;
-    index index.html;
-
-    # 所有对 /api/ 的请求，反代给后端 Flask/Gunicorn
-    location /api/ {
-        proxy_pass http://127.0.0.1:10290;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-    }
-
-    # 对于前端路由，所有路径都返回 index.html
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-
-    # 可选：静态资源 cache-control
-    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico)$ {
-        expires 7d;
-        add_header Cache-Control "public";
-    }
-}
-```
-启用站点
-```
-sudo ln -sf /etc/nginx/sites-available/nsh_frontend /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
-# 如有需要可删除默认站点
-sudo rm /etc/nginx/sites-enabled/default
-```
-
-### 3.5 设置访问密码
-```
-sudo apt update
-sudo apt install apache2-utils
-# 创建密码文件
-sudo htpasswd -c /etc/nginx/.htpasswd XXX
-# 修改用户密码
-sudo htpasswd /etc/nginx/.htpasswd XXX
-```
-
-# License
-本项目采用 MIT License。
+本项目采用 [MIT License](LICENSE)。

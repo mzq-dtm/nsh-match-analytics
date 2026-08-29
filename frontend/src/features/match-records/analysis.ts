@@ -7,11 +7,53 @@ import type {
   AggregatedPerformanceRow,
   AnalysisCheckKey,
   AnalysisThresholds,
+  GuildMatchStatistics,
   NormalizedPerformance,
   ProfessionAggregatedRow,
   RawPerformance,
   ViewSide,
 } from '@/features/match-records/types'
+
+function sumPerformanceField(
+  rows: NormalizedPerformance[],
+  key: keyof NormalizedPerformance,
+): number {
+  return rows.reduce((total, row) => {
+    const value = row[key]
+    return total + (typeof value === 'number' && Number.isFinite(value) ? value : 0)
+  }, 0)
+}
+
+export function buildGuildMatchStatistics(
+  rows: NormalizedPerformance[] | null | undefined,
+): GuildMatchStatistics {
+  const normalizedRows = rows ?? []
+  const participantCount = normalizedRows.length
+  const totalDamageToPlayers = sumPerformanceField(normalizedRows, 'damage_to_players')
+  const totalDamageToStructures = sumPerformanceField(normalizedRows, 'damage_to_structures')
+  const totalKills = sumPerformanceField(normalizedRows, 'kills')
+  const totalDeaths = sumPerformanceField(normalizedRows, 'serious_injuries')
+  const hasCombatPower = normalizedRows.some(
+    (row) => row.total_combat_power != null && Number.isFinite(row.total_combat_power),
+  )
+  const totalCombatPower = hasCombatPower
+    ? sumPerformanceField(normalizedRows, 'total_combat_power')
+    : null
+
+  return {
+    participantCount,
+    totalCombatPower,
+    totalDamageToPlayers,
+    totalDamageToStructures,
+    totalKills,
+    kd: totalKills / Math.max(totalDeaths, 1),
+    totalHealing: sumPerformanceField(normalizedRows, 'healing_amount'),
+    totalHuayu: sumPerformanceField(normalizedRows, 'skill_huayu'),
+    totalQingdeng: sumPerformanceField(normalizedRows, 'skill_qingdeng'),
+    totalControl: sumPerformanceField(normalizedRows, 'control_count'),
+    totalWarResources: sumPerformanceField(normalizedRows, 'war_resources'),
+  }
+}
 
 export function normalizePerformances(
   data: RawPerformance[] | null | undefined,

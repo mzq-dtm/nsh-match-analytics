@@ -13,6 +13,14 @@
 
       <span v-if="selectedMatch" class="outcome-text">{{ matchOutcomeText }}</span>
 
+      <button
+        class="comparison-btn"
+        :disabled="!selectedMatch"
+        @click="openComparisonModal"
+      >
+        敌我统计对比
+      </button>
+
       <button class="toggle-side-btn" :disabled="!selectedMatch" @click="toggleViewSide">
         {{ isAwayView ? '显示本帮数据' : '显示对手数据' }}
       </button>
@@ -21,12 +29,26 @@
         自动分析
       </button>
 
+      <button
+        class="report-btn"
+        :disabled="!selectedMatch || isGeneratingReport"
+        @click="downloadTeamReport"
+      >
+        {{ isGeneratingReport ? '正在生成……' : '导出分团数据' }}
+      </button>
+
       <button class="clear-btn" :disabled="!hasHighlights" @click="clearHighlights">
         清除标记
       </button>
 
+      <a class="import-btn" href="/admin/import">导入数据</a>
+
       <span v-if="selectedMatch && matchNote" class="match-note">
         备注：{{ matchNote }}
+      </span>
+
+      <span v-if="reportError" class="report-error" role="alert">
+        {{ reportError }}
       </span>
     </div>
 
@@ -173,6 +195,17 @@
       </div>
     </div>
 
+    <GuildStatsComparison
+      v-if="showComparisonModal"
+      :home-guild-name="comparisonGuildNames.home"
+      :away-guild-name="comparisonGuildNames.away"
+      :home-rows="comparisonHomePerformances"
+      :away-rows="comparisonAwayPerformances"
+      :loading="comparisonLoading"
+      :error-message="comparisonError"
+      @close="closeComparisonModal"
+    />
+
     <div
       v-if="showAnalysisModal"
       ref="analysisModalOverlayRef"
@@ -239,6 +272,7 @@
 <script setup lang="ts">
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import StatTable from '@/components/table/StatTable.vue'
+import GuildStatsComparison from '@/features/match-records/components/GuildStatsComparison.vue'
 import {
   getMatches,
   getMatchResult,
@@ -247,11 +281,12 @@ import {
   type MatchItem,
   type MatchResult,
 } from '@/api/nsh'
-import {formatMatchName} from '@/utils/match'
+import {extractMatchGuildNames, formatMatchName} from '@/utils/match'
 import {getContrastColor, getJobColor} from '@/utils/color'
 import {useTableSort} from '@/composables/table/useTableSort'
 import {useVisibleColumns} from '@/composables/table/useVisibleColumns'
 import {useTableHighlight} from '@/composables/table/useTableHighlight'
+import {generateMatchReportImage} from '@/features/match-report/generateMatchReportImage'
 import type {
   AggregatedPerformanceRow,
   AnalysisFailureRow,
@@ -299,6 +334,14 @@ const matchOutcome = ref<MatchResult['home_outcome']>(null)
 const matchNote = ref<string>('')
 const showAnalysisModal = ref<boolean>(false)
 const analysisModalOverlayRef = ref<HTMLElement | null>(null)
+const showComparisonModal = ref<boolean>(false)
+const comparisonLoading = ref<boolean>(false)
+const comparisonError = ref<string>('')
+const comparisonHomePerformances = ref<NormalizedPerformance[]>([])
+const comparisonAwayPerformances = ref<NormalizedPerformance[]>([])
+const isGeneratingReport = ref<boolean>(false)
+const reportError = ref<string>('')
+let comparisonRequestVersion = 0
 
 const subTabs = ref<SubTab[]>([])
 const activeSubTab = ref<string>('all')
@@ -401,6 +444,12 @@ const selectedMatchLabel = computed<string>(() => {
   const matchId = Number(selectedMatch.value)
   const match = matches.value.find((item) => Number(item.match_id) === matchId)
   return match ? formatMatchName(match.match_name) : '未选择联赛'
+})
+
+const comparisonGuildNames = computed(() => {
+  const matchId = Number(selectedMatch.value)
+  const match = matches.value.find((item) => Number(item.match_id) === matchId)
+  return extractMatchGuildNames(match?.match_name)
 })
 
 const analysisPercentLabel = computed<string>(() => `${Math.round(ANALYSIS_PERCENTILE * 100)}%`)
@@ -567,6 +616,17 @@ async function fetchHomeData(matchId: number): Promise<NormalizedPerformance[]> 
   return normalized
 }
 
+async function fetchAwayData(matchId: number): Promise<NormalizedPerformance[]> {
+  if (awayCache.value.has(matchId)) {
+    return awayCache.value.get(matchId) ?? []
+  }
+
+  const rows = await getOpponentPerformances(matchId)
+  const normalized = normalizePerformances(rows, 'away')
+  awayCache.value.set(matchId, normalized)
+  return normalized
+}
+
 async function fetchMatchResult(matchId: number): Promise<CachedMatchResult> {
   if (resultCache.value.has(matchId)) {
     return resultCache.value.get(matchId) ?? { home_outcome: null, note: '' }
@@ -605,13 +665,7 @@ async function toggleViewSide(): Promise<void> {
   const matchId = Number(selectedMatch.value)
 
   if (!isAwayView.value) {
-    const data = awayCache.value.has(matchId)
-      ? (awayCache.value.get(matchId) ?? [])
-      : await getOpponentPerformances(matchId).then((rows) => {
-          const normalized = normalizePerformances(rows, 'away')
-          awayCache.value.set(matchId, normalized)
-          return normalized
-        })
+    const data = await fetchAwayData(matchId)
 
     viewSide.value = 'away'
     applyPerformances(data)
@@ -621,6 +675,39 @@ async function toggleViewSide(): Promise<void> {
   const data = homeCache.value.get(matchId) ?? homePerformances.value
   viewSide.value = 'home'
   applyPerformances(data)
+}
+
+function closeComparisonModal(): void {
+  comparisonRequestVersion += 1
+  showComparisonModal.value = false
+}
+
+async function openComparisonModal(): Promise<void> {
+  if (!selectedMatch.value) return
+
+  const matchId = Number(selectedMatch.value)
+  const requestVersion = ++comparisonRequestVersion
+  comparisonLoading.value = true
+  comparisonError.value = ''
+  comparisonHomePerformances.value = []
+  comparisonAwayPerformances.value = []
+  showComparisonModal.value = true
+
+  try {
+    const [homeData, awayData] = await Promise.all([
+      fetchHomeData(matchId),
+      fetchAwayData(matchId),
+    ])
+    if (requestVersion !== comparisonRequestVersion) return
+
+    comparisonHomePerformances.value = homeData
+    comparisonAwayPerformances.value = awayData
+  } catch (error) {
+    if (requestVersion !== comparisonRequestVersion) return
+    comparisonError.value = error instanceof Error ? error.message : '双方统计数据加载失败'
+  } finally {
+    if (requestVersion === comparisonRequestVersion) comparisonLoading.value = false
+  }
 }
 
 function closeAnalysisModal(): void {
@@ -634,6 +721,45 @@ async function openAnalysisModal(): Promise<void> {
   const homeData = await fetchHomeData(matchId)
   homePerformances.value = homeData
   showAnalysisModal.value = true
+}
+
+async function downloadTeamReport(): Promise<void> {
+  if (!selectedMatch.value || isGeneratingReport.value) return
+
+  const matchId = Number(selectedMatch.value)
+  const match = matches.value.find((item) => Number(item.match_id) === matchId)
+  let downloadUrl: string | null = null
+  let downloadLink: HTMLAnchorElement | null = null
+
+  isGeneratingReport.value = true
+  reportError.value = ''
+
+  try {
+    if (!match) throw new Error('未找到所选联赛，请重新选择后再试')
+
+    const {blob, filename} = await generateMatchReportImage({
+      matchId,
+      matchName: match.match_name,
+      homePerformances: homePerformances.value,
+      homeOutcome: matchOutcome.value,
+      note: matchNote.value,
+    })
+
+    downloadUrl = URL.createObjectURL(blob)
+    downloadLink = document.createElement('a')
+    downloadLink.href = downloadUrl
+    downloadLink.download = filename
+    downloadLink.style.display = 'none'
+    document.body.appendChild(downloadLink)
+    downloadLink.click()
+  } catch (error) {
+    const message = error instanceof Error ? error.message.trim() : ''
+    reportError.value = message || '分团数据图生成失败，请稍后重试'
+  } finally {
+    downloadLink?.remove()
+    if (downloadUrl) URL.revokeObjectURL(downloadUrl)
+    isGeneratingReport.value = false
+  }
 }
 
 function onAnalysisModalDocumentKeydown(event: KeyboardEvent): void {
@@ -899,10 +1025,24 @@ onBeforeUnmount(() => {
   white-space: nowrap;
 }
 
+.report-error {
+  flex-basis: 100%;
+  color: #c0392b;
+}
+
 .analysis-btn {
   padding: 0.35rem 0.75rem;
   border: 1px solid #e6a23c;
   background: #e6a23c;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+}
+
+.comparison-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #4f6fae;
+  background: #4f6fae;
   border-radius: 4px;
   cursor: pointer;
   color: #fff;
@@ -1011,6 +1151,15 @@ onBeforeUnmount(() => {
   text-underline-offset: 3px;
 }
 
+.report-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #00796b;
+  background: #00796b;
+  border-radius: 4px;
+  cursor: pointer;
+  color: #fff;
+}
+
 .clear-btn {
   padding: 0.35rem 0.75rem;
   border: 1px solid #409eff;
@@ -1018,6 +1167,21 @@ onBeforeUnmount(() => {
   border-radius: 4px;
   cursor: pointer;
   color: #fff;
+}
+
+.import-btn {
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #8e44ad;
+  background: #8e44ad;
+  border-radius: 4px;
+  color: #fff;
+  cursor: pointer;
+  text-decoration: none;
+}
+
+.import-btn:hover {
+  background: #7d3c98;
+  border-color: #7d3c98;
 }
 
 .toggle-side-btn {
@@ -1031,7 +1195,9 @@ onBeforeUnmount(() => {
 
 .toggle-side-btn:disabled,
 .clear-btn:disabled,
-.analysis-btn:disabled {
+.report-btn:disabled,
+.analysis-btn:disabled,
+.comparison-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }

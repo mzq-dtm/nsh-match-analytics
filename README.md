@@ -6,7 +6,7 @@
 
 ## 主要功能
 
-- **联赛数据**：查看本帮或对手的单场战绩、胜负和备注，按团或职业汇总，并进行敌我统计对比和本帮表现自动分析。
+- **联赛数据**：查看本帮或对手的单场战绩、胜负和备注，按团或职业汇总，进行敌我统计对比和本帮表现自动分析，并将本帮分团数据导出为团队战报 PNG 长图。
 - **帮众出勤分析**：按日期范围统计出勤率、近期战力、首次/最后参赛时间及累计战斗数据。
 - **帮众数据查询**：按昵称、拼音、拼音首字母或玩家 ID 查找玩家，查看历史表现和单场排名。
 - **联赛团队配置**：读取成员 CSV，筛选和拖放成员、修改职业，并生成分团图片预览或导出电子表格。
@@ -15,6 +15,7 @@
 ## 文档
 
 - [用户指南](docs/user-guide.md)：页面操作、统计口径和团队配置。
+- [开发与测试指南](docs/development.md)：开发环境、质量检查命令、测试范围和贡献流程。
 - [管理员导入指南](docs/admin-import.md)：CSV 格式、两种导入模式、玩家 ID 和故障处理。
 - [系统架构](docs/architecture.md)：组件边界、数据流、数据模型和核心约束。
 - [API 文档](docs/api.md)：查询 API 与管理员 API 契约。
@@ -36,8 +37,8 @@
 
 - Linux、macOS 或 WSL；生产部署指南以 Ubuntu 为例。
 - Python 3.9 或更高版本；CI 使用 Python 3.11。
-- Node.js `^20.19.0` 或 `>=22.12.0`。
-- npm。
+- Node.js `^20.19.0`、`^22.13.0` 或 `>=24.0.0`；推荐使用与 CI 一致的 Node.js 24。
+- npm 10 或更高版本。
 - SQLite 3 命令行工具。
 
 ## 本地启动
@@ -121,13 +122,27 @@ curl -fsS http://127.0.0.1:10291/admin-api/health
 
 ```bash
 cd frontend
-npm ci
+npm ci --include=dev
 npm run dev
 ```
 
 访问 `http://127.0.0.1:5173`。Vite 会将 `/api` 代理到 10290，将 `/admin-api` 代理到 10291。
 
 管理员导入页位于 `http://127.0.0.1:5173/admin/import`。本地开发服务器不提供管理员认证，不要将本地服务暴露到不可信网络。
+
+## 开发与质量检查
+
+安装前端依赖时需要保留开发依赖；Vitest、Vite、TypeScript 和 ESLint 都不需要全局安装。提交前可在 `frontend/` 目录依次执行：
+
+```bash
+npm ci --include=dev
+npm run lint
+npm test
+npm run type-check
+npm run build
+```
+
+详细的开发环境、命令说明和当前自动化测试边界见[开发与测试指南](docs/development.md)。
 
 ## 项目目录
 
@@ -136,6 +151,7 @@ backend/                 Flask 查询后端、管理员后端和运行配置
 database/                SQLite schema、初始化数据和本帮初始化脚本
 frontend/                Vue 3 单页前端
 docs/user-guide.md       普通用户操作与统计口径
+docs/development.md      开发环境、质量检查与测试边界
 docs/admin-import.md     管理员导入流程与 CSV 契约
 docs/architecture.md     架构、数据流和数据模型
 docs/api.md              HTTP API 契约

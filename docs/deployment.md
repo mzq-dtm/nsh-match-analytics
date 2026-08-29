@@ -45,7 +45,10 @@ sudo apt install -y git nginx sqlite3 apache2-utils python3 python3-venv python3
 版本要求：
 
 - Python 3.9 或更高版本，推荐使用 CI 验证过的 Python 3.11
-- Node.js `^20.19.0` 或 `>=22.12.0`
+- 前端构建与测试使用 Node.js `^20.19.0`、`^22.13.0` 或 `>=24.0.0`，推荐使用 CI 验证过的 Node.js 24
+- npm 10 或更高版本
+
+不要使用 Node.js 23：Vite 的版本范围虽然接受它，但当前 Vitest 4 只支持 Node.js 20、22 和 24 及以上版本，无法完整执行本项目的构建前检查。生产服务器如果不构建前端，则不受这项 Node.js 要求影响。
 
 如果服务器负责构建前端，还需要从受支持的发行渠道安装 Node.js。开始前检查；使用外部前端构建产物时，可以跳过 `node` 和 `npm` 两项：
 
@@ -293,9 +296,14 @@ Gunicorn 默认请求超时为 30 秒。数据库较大时，导入前备份可�
 
 ```bash
 cd /opt/nsh-match-analytics/frontend
-npm ci
+npm ci --include=dev
+npm run lint
+npm test
+npm run type-check
 npm run build
 ```
+
+Vite、TypeScript、ESLint 和 Vitest 都是开发依赖。服务器构建时必须安装 `devDependencies`；即使环境中设置了生产模式，也不要使用 `npm ci --omit=dev`。`--include=dev` 会让安装结果严格按锁文件包含这些构建和检查工具。
 
 构建结果位于：
 
@@ -308,12 +316,17 @@ npm run build
 ```bash
 git checkout 要部署的提交或标签
 cd frontend
-npm ci
+npm ci --include=dev
+npm run lint
+npm test
+npm run type-check
 npm run build
 tar -C dist -czf nsh-match-analytics-frontend.tar.gz .
 sha256sum nsh-match-analytics-frontend.tar.gz
 git rev-parse HEAD
 ```
+
+服务器构建和外部构建都应按 CI 的顺序执行 lint、测试、类型检查和生产构建；任何一步失败都不得发布该产物。
 
 通过可信通道把压缩包、SHA-256 和提交号传到服务器。核对提交号与后端版本一致、校验和无误后，解压到仅供本次发布使用的新目录，例如 `/var/tmp/nsh-match-analytics-dist-提交号`。不要接收来源不明的构建产物，也不要把旧 `dist/` 与新产物混合。
 
@@ -565,6 +578,12 @@ curl -fsS -u 管理员用户名 http://服务器地址/admin-api/health
 
 - `http://服务器地址/`
 - `http://服务器地址/admin/import`
+- 在联赛数据页选择一场比赛，点击“导出分团数据”，确认浏览器成功下载 PNG 且图片可以完整打开；
+- 核对 PNG 的对阵、时间、胜负、备注、所有团队及每团四张表，没有底部截断或缺失；
+- 切换到对手数据视图后再次导出，确认图片仍然是本帮分团数据，没有混入对手战绩；
+- 使用实际数据量最大的场次至少导出一次，确认目标桌面浏览器可以完成超长图绘制和 PNG 编码，且没有尺寸或内存错误。
+
+团队战报完全由浏览器 Canvas 生成，本项验收不能由 `curl` 或后端健康检查替代。若计划支持多种浏览器或移动设备，应分别验收；不同浏览器和设备的 Canvas 尺寸与内存上限可能不同。
 
 以上地址只适用于本机或可信内网。公网部署必须改用 `https://`，并额外确认访问 HTTP 地址会重定向到固定 HTTPS 域名、证书有效且管理员页面不会通过 HTTP 返回内容。
 
@@ -848,6 +867,8 @@ sudo -u nsh du -sh /var/backups/nsh-match-analytics \
 ## 相关文档
 
 - [README](../README.md)
+- [开发与测试指南](development.md)
+- [用户指南](user-guide.md)
 - [管理员导入指南](admin-import.md)
 - [系统架构](architecture.md)
 - [API 文档](api.md)

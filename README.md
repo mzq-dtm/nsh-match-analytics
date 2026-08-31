@@ -16,10 +16,10 @@
 
 - [用户指南](docs/user-guide.md)：页面操作、统计口径和团队配置。
 - [开发与测试指南](docs/development.md)：开发环境、质量检查命令、测试范围和贡献流程。
-- [管理员导入指南](docs/admin-import.md)：CSV 格式、两种导入模式、玩家 ID 和故障处理。
+- [管理员导入指南](docs/admin-import.md)：CSV 格式、两种导入模式、合服后首次导入、玩家 ID 和故障处理。
 - [系统架构](docs/architecture.md)：组件边界、数据流、数据模型和核心约束。
 - [API 文档](docs/api.md)：查询 API 与管理员 API 契约。
-- [生产部署指南](docs/deployment.md)：Ubuntu、Gunicorn、Nginx、权限、升级、备份和恢复。
+- [生产部署指南](docs/deployment.md)：Ubuntu、Gunicorn、Nginx、权限、升级、合服边界处理、备份和恢复。
 
 ## 系统组成
 
@@ -68,6 +68,8 @@
 `insert_home_guild.py` 会提示输入本帮名称。这个名称必须与管理员页面填写的名称及 CSV 中的帮会名完全一致。导入格式和名称约束见[管理员导入指南](docs/admin-import.md)。
 
 如果初始化中途失败，先确认 `database/game_league.db` 是本次创建且不包含需要保留的数据，再处理该不完整文件并重新执行；不要对已有数据库反复运行初始化 SQL。
+
+已有数据库遇到游戏服务器合服时同样不能重新初始化。合服需要在保留既有比赛和玩家历史的前提下结束旧昵称映射，并在后续首次导入中重新确认玩家身份；本地或生产操作均应遵循[生产部署指南的合服边界处理流程](docs/deployment.md#合服边界处理)。
 
 ### 2. 安装后端依赖
 
@@ -148,7 +150,7 @@ npm run build
 
 ```text
 backend/                 Flask 查询后端、管理员后端和运行配置
-database/                SQLite schema、初始化数据和本帮初始化脚本
+database/                SQLite schema、初始化数据、本帮初始化和合服维护脚本
 frontend/                Vue 3 单页前端
 docs/user-guide.md       普通用户操作与统计口径
 docs/development.md      开发环境、质量检查与测试边界

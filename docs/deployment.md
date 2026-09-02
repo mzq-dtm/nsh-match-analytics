@@ -166,7 +166,7 @@ sudo -u nsh sqlite3 /var/lib/nsh-match-analytics/game_league.db \
 )
 ```
 
-脚本会交互询问新名称，并在名称已存在时保持数据库不变。任一步失败时服务会保持停止；先检查原因和刚创建的备份，不要跳过完整性检查直接启动。完成后使用新名称做下一场导入预检，并确认旧比赛仍可查询。
+脚本会交互询问新名称，并在名称已存在时保持数据库不变。任一步失败时服务会保持停止；先检查原因和刚创建的备份，不要跳过完整性检查直接启动。完成后使用新名称做下一场导入预检，并确认旧比赛仍可查询。如果本帮更名发生在游戏服务器合服期间，名称登记不能替代昵称身份重置；还必须在第一场合服后比赛预检前执行[合服边界处理](#合服边界处理)。
 
 ## 4. 后端依赖和配置
 
@@ -698,6 +698,157 @@ sudo systemctl reload nginx
 
 任一步失败时不要直接启动不完整的新版本。先查看错误，必要时将代码回退到更新前提交、恢复配置参考和数据库手工备份，再启动服务。完成后重新执行全部部署验证。
 
+## 合服边界处理
+
+本节是生产环境处理游戏服务器合服的完整 runbook。它只适用于**同一个逻辑本帮**在合服后需要重新确认“昵称对应哪个玩家 ID”的情况，不能用来把两个互不相关的本帮数据库合并。普通本帮更名应先按[已有生产库登记更名后的本帮名称](#已有生产库登记更名后的本帮名称)登记新名称；如果更名与合服同时发生，两项操作都要完成，并且都必须早于第一场合服后比赛的预检。
+
+`database/server_merge.py` 会把输入的 `YYYY-MM-DD` 解释为该日 **12:00:00**，并将这个无时区时间作为昵称身份边界。生产服务器必须使用 `Asia/Shanghai`，最后一场合服前比赛必须已经导入且时间严格早于该边界；第一场合服后比赛的 CSV 文件时间及数据库比赛时间必须严格晚于该边界，并且只能在边界处理完成后重新发起预检。脚本会关闭 `nickname_history` 中全部仍开放且 `player_id != 0` 的记录，但保留表示“无团长”的 `player_id = 0` 哨兵；它不会修改比赛、战绩、玩家主记录或帮会记录。
+
+合服处理会修改昵称历史，但管理员预检记录的数据库修订摘要只包含比赛数量、最新比赛 ID 和最新比赛时间。因此，合服前创建的预检不会仅因昵称变化而可靠地自动失效。维护窗口开始前应通知管理员停止操作；停服后必须删除全部旧预检，无论它们是否仍在一小时有效期内。删除后无法恢复，管理员必须重新上传原始 CSV。
+
+脚本自身**不会创建数据库备份**，也没有自动撤销功能。下面的代码块按本文开头约定的标准生产路径编写；使用这些标准路径时，只把 `merge_date` 改为实际合服日期，并且必须整体执行。如果实际部署调整过数据库、上传或备份路径，必须先逐项修改并复核代码块中的路径断言和 Python 调用，不能只修改日期后直接运行。代码块会验证时区和固定生产路径、停止两个后端、检查数据库现状、要求人工确认边界、创建并校验手工备份、列出并作废全部预检、以 `nsh` 用户运行脚本、校验修改结果，最后才重新启动服务。停服前的校验失败时，服务保持原有状态；两个服务确认停止后，脚本运行或数据库校验失败会让它们继续保持停止；最终启动或健康检查失败时，服务可能只有部分恢复，必须检查实际状态后再处理。
+
+`database/config.py` 的默认数据库是相对于 `database/` 的 `./game_league.db`，与本文的生产库 `/var/lib/nsh-match-analytics/game_league.db` 不同。不要编辑受 Git 跟踪的 `database/config.py`，也不要直接运行 `python3 server_merge.py`。下面的 Python 调用会先在当前进程中把 `Config.DATABASE` 显式覆盖为生产库绝对路径，再导入并调用合服模块。
+
+```bash
+(
+  set -eu
+  umask 077
+  cd /opt/nsh-match-analytics
+
+  database="/var/lib/nsh-match-analytics/game_league.db"
+  database_parent="/var/lib/nsh-match-analytics"
+  upload_root="/var/lib/nsh-match-analytics/admin-upload"
+  backup_root="/var/backups/nsh-match-analytics"
+  merge_date="2026-08-31"  # 必须改为实际合服日期，格式为 YYYY-MM-DD
+  merge_time="$merge_date 12:00:00"
+  backup_path="$backup_root/manual-before-server-merge-$(date +%Y-%m-%d_%H-%M-%S).db"
+
+  test "$database" = "/var/lib/nsh-match-analytics/game_league.db"
+  test "$database_parent" = "/var/lib/nsh-match-analytics"
+  test "$(dirname "$database")" = "$database_parent"
+  test "$upload_root" = "/var/lib/nsh-match-analytics/admin-upload"
+  test "$backup_root" = "/var/backups/nsh-match-analytics"
+  test "$(date -d "$merge_date" '+%F')" = "$merge_date"
+  test "$(date -d "$merge_time" '+%F %T')" = "$merge_time"
+  test "$(timedatectl show --property=Timezone --value)" = "Asia/Shanghai"
+  test -f database/server_merge.py
+  sudo -u nsh test -f "$database"
+  sudo -u nsh test -r "$database"
+  sudo -u nsh test -w "$database"
+  sudo -u nsh test -w "$database_parent"
+  sudo -u nsh test -d "$upload_root"
+  sudo -u nsh test -w "$upload_root"
+  sudo -u nsh test -d "$backup_root"
+  sudo -u nsh test -w "$backup_root"
+  sudo -u nsh test ! -e "$backup_path"
+
+  sudo systemctl stop nsh-admin nsh-backend
+  if sudo systemctl is-active --quiet nsh-admin || \
+     sudo systemctl is-active --quiet nsh-backend; then
+    echo "后端服务仍在运行，终止合服处理" >&2
+    exit 1
+  fi
+
+  test "$(sudo -u nsh sqlite3 "$database" 'PRAGMA integrity_check;')" = "ok"
+  test -z "$(sudo -u nsh sqlite3 "$database" 'PRAGMA foreign_key_check;')"
+
+  latest_match="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COALESCE(MAX(match_time), '') FROM matches;")"
+  matches_at_or_after_boundary="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM matches WHERE match_time >= '$merge_time';")"
+  future_open_rows="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE valid_to IS NULL AND player_id <> 0 AND valid_from >= '$merge_time';")"
+  target_rows="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE valid_to IS NULL AND player_id <> 0;")"
+  sentinel_open_before="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE player_id = 0 AND nickname = '无' AND valid_to IS NULL;")"
+  boundary_rows_before="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE player_id <> 0 AND valid_to = '$merge_time';")"
+
+  printf '数据库最新比赛时间：%s\n' "${latest_match:-无}"
+  printf '合服边界：%s\n' "$merge_time"
+  printf '预计关闭的开放昵称记录：%s\n' "$target_rows"
+  printf '边界时刻已有的关闭记录：%s\n' "$boundary_rows_before"
+
+  test "$matches_at_or_after_boundary" -eq 0
+  test "$future_open_rows" -eq 0
+  test "$target_rows" -gt 0
+  test "$sentinel_open_before" -ge 1
+
+  printf '请再次输入合服边界（完整输入 %s）以继续：' "$merge_time" >&2
+  read -r confirmed_merge_time
+  if [ "$confirmed_merge_time" != "$merge_time" ]; then
+    echo "合服边界确认不一致，终止处理；两个后端保持停止" >&2
+    exit 1
+  fi
+
+  sudo -u nsh sqlite3 "$database" ".backup '$backup_path'"
+  test "$(sudo -u nsh sqlite3 "$backup_path" 'PRAGMA integrity_check;')" = "ok"
+  test -z "$(sudo -u nsh sqlite3 "$backup_path" 'PRAGMA foreign_key_check;')"
+
+  unexpected_upload_entry="$(sudo -u nsh find "$upload_root" \
+    -mindepth 1 -maxdepth 1 ! -type d -print -quit)"
+  test -z "$unexpected_upload_entry"
+  preview_dirs="$(sudo -u nsh find "$upload_root" \
+    -mindepth 1 -maxdepth 1 -type d -print)"
+  if [ -n "$preview_dirs" ]; then
+    printf '以下预检目录将全部失效并删除：\n%s\n' "$preview_dirs"
+    printf '输入 invalidate-all-previews 以确认：' >&2
+    read -r preview_confirmation
+    if [ "$preview_confirmation" != "invalidate-all-previews" ]; then
+      echo "未确认作废全部旧预检，终止处理；两个后端保持停止" >&2
+      exit 1
+    fi
+    sudo -u nsh find "$upload_root" -mindepth 1 -depth -delete
+  fi
+  test -z "$(sudo -u nsh find "$upload_root" -mindepth 1 -print -quit)"
+
+  expected_boundary_rows=$((boundary_rows_before + target_rows))
+  cd /opt/nsh-match-analytics/database
+  affected_rows="$(
+    sudo -u nsh env NSH_MERGE_DATE="$merge_date" python3 -c \
+      'import os; from config import Config; Config.DATABASE = "/var/lib/nsh-match-analytics/game_league.db"; from server_merge import close_active_nicknames, parse_merge_time, resolve_database_path; merge_time = parse_merge_time(os.environ["NSH_MERGE_DATE"]); print(close_active_nicknames(resolve_database_path(), merge_time))'
+  )"
+  test "$affected_rows" -eq "$target_rows"
+
+  open_non_sentinel_after="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE valid_to IS NULL AND player_id <> 0;")"
+  sentinel_open_after="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE player_id = 0 AND nickname = '无' AND valid_to IS NULL;")"
+  boundary_rows_after="$(sudo -u nsh sqlite3 "$database" \
+    "SELECT COUNT(*) FROM nickname_history WHERE player_id <> 0 AND valid_to = '$merge_time';")"
+
+  test "$open_non_sentinel_after" -eq 0
+  test "$sentinel_open_after" -eq "$sentinel_open_before"
+  test "$boundary_rows_after" -eq "$expected_boundary_rows"
+  test "$(sudo -u nsh sqlite3 "$database" 'PRAGMA integrity_check;')" = "ok"
+  test -z "$(sudo -u nsh sqlite3 "$database" 'PRAGMA foreign_key_check;')"
+
+  sudo systemctl start nsh-backend nsh-admin
+  sudo systemctl is-active --quiet nsh-backend
+  sudo systemctl is-active --quiet nsh-admin
+  curl -fsS http://127.0.0.1:10290/api/matches >/dev/null
+  curl -fsS http://127.0.0.1:10291/admin-api/health >/dev/null
+
+  printf '合服边界处理完成：关闭 %s 条昵称记录；手工备份：%s\n' \
+    "$affected_rows" "$backup_path"
+)
+```
+
+上面的运行前检查与脚本自身都会拒绝两类异常状态：数据库已经存在时间不早于合服边界的比赛，或仍开放的非哨兵昵称存在 `valid_from >= 合服边界` 的记录。`target_rows` 为零通常表示没有可关闭身份或该边界已经处理过；不要为绕过检查而手工修改 SQL、日期或哨兵记录，应先核对目标数据库和维护记录。
+
+如果脚本调用前失败，数据库不会被合服脚本修改，但手工备份和已经作废的预检目录可能保留；确认原因后仍须从头执行并重新预检。如果脚本报错，其数据库事务会回滚。如果脚本已经成功，但日期、目标数据库或运行后检查有误，保持两个后端停止，不要手工改回 `nickname_history`；把本节输出的 `manual-before-server-merge-*.db` 作为 `restore_source`，严格按[恢复数据库](#恢复数据库)流程恢复。旧预检目录不包含在数据库备份中，恢复后仍需重新上传。
+
+### 首场合服后导入验收
+
+1. 确认联赛 CSV 文件名时间严格晚于合服边界，并从管理员页面重新上传两份 CSV；不能使用合服前的预检令牌或浏览器中残留的摘要。
+2. 后端预检应把本帮所有实际参赛玩家及真实团长列为 `not_found`，要求重新填写玩家 ID；“无”团长不应出现在确认项中。如果结果不符合预期，停止提交并按[日志与排障](#日志与排障)检查边界、CSV 时间和开放昵称。
+3. 逐人核对游戏玩家 ID。同一个人只有在游戏 ID 确实未变化时才填写旧 ID；不能根据昵称相同批量复用旧 ID，也不能为消除提示而编造新 ID。
+4. 提交成功后，在联赛数据页核对本帮和对方人数及关键统计；再抽查继续使用旧 ID 的玩家，确认合服前后的比赛仍归入同一玩家历史。
+5. 检查帮众数据查询和出勤页面：同一昵称即使在合服前后产生多个有效期，也不应在同一玩家的昵称列表中重复显示。尚未参加首场合服后比赛的玩家在重新建立有效昵称前，团队配置页按当前昵称查询不到近期历史属于预期行为。
+6. 完成验收前不要删除手工备份；发现身份填写错误时停止导入更晚比赛，保留源 CSV、日志和备份，再按恢复流程处理。
+
 ## 备份与恢复
 
 ### 自动备份行为
@@ -713,6 +864,8 @@ DB_BACKUP_DIR/YYYY-MM-DD_HH-MM-SS.db
 - 如果备份成功但后续写入失败，备份文件可能仍会保留。
 - 系统不会自动删除旧备份，目录会持续增长。
 - 同一磁盘上的自动备份不能替代异机或对象存储备份。
+
+这些自动备份只由管理员最终导入创建。[合服边界处理](#合服边界处理)直接修改昵称历史，不会触发自动备份；运行合服脚本前必须按该 runbook 创建并校验独立的手工备份。
 
 应监控容量并定期复制到其他存储。删除前先列出候选文件：
 
@@ -807,6 +960,7 @@ ADMIN_UPLOAD_DIR/<随机令牌>/
 - 放弃或过期的预检只会在下一次 preview/commit 请求开始时惰性清理；长时间没有管理请求时仍可能占用磁盘。
 - CSV 可能包含帮会成员信息，上传目录应保持 `0700`，不能由 Nginx 提供静态访问。
 - 手动清理会令所有尚未提交的预检失效，必须先停止 `nsh-admin`。
+- [合服边界处理](#合服边界处理)会修改不包含在预检修订摘要中的昵称历史，因此必须在停服期间作废**全部**旧预检；合服时不能只按这里的“两小时以上”条件清理。
 
 检查超过 2 小时的暂存目录：
 
@@ -863,6 +1017,9 @@ sudo -u nsh du -sh /var/backups/nsh-match-analytics \
 | 创建备份失败 | 备份目录权限、数据库读取权限、磁盘空间和 inode |
 | 数据库被锁定 | 是否有其他写入进程；等待后重试，不要绕过事务保护 |
 | 预检失效或数据库已变化 | 其他导入在预检后完成；重新上传并预检 |
+| 合服处理提示数据库不存在或目标记录数异常 | 不要裸跑 `database/server_merge.py`；按[合服边界处理](#合服边界处理)核对固定生产路径、显式 `Config.DATABASE` 覆盖、运行用户和预估行数 |
+| 合服时间必须晚于最新比赛，或存在异常的未来开放昵称 | 核对 `Asia/Shanghai`、正午边界和最新比赛；不要倒序处理或绕过检查，必要时先恢复正确维护顺序 |
+| 首场合服后预检没有要求重新确认全部实际玩家和团长 | 停止提交；确认旧预检已全部作废、CSV 时间晚于边界、非哨兵开放昵称在处理后为零，然后重新上传预检 |
 
 ## 相关文档
 

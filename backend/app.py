@@ -152,19 +152,20 @@ def api_players():
     # 结果字典，用于存储每个玩家的昵称
     players = []
 
-    # 对每个玩家查询其最新的 3 个昵称
+    # 对每个玩家查询其最新的 3 个不重复昵称
     for row in player_rows:
         pid = row['player_id']
 
-        # 查询该玩家的最新 3 个昵称
+        # 同一昵称可能对应多个有效期，只按最近一次出现时间保留一个
         nick_rows = db.execute("""
-            SELECT nickname
-            FROM nickname_history
-            WHERE player_id = ?
-            ORDER BY valid_from DESC
+            SELECT nickname, MAX(valid_from) AS latest_valid_from
+              FROM nickname_history
+             WHERE player_id = ?
+             GROUP BY nickname
+             ORDER BY latest_valid_from DESC
+             LIMIT 3
         """, (pid,)).fetchall()
-        # 只保留最新的 3 个昵称
-        nicknames = [r['nickname'] for r in nick_rows[:3]]
+        nicknames = [r['nickname'] for r in nick_rows]
         # 将玩家ID和昵称保存到字典中
         players.append({
             'player_id': pid,
@@ -538,9 +539,12 @@ def api_attendance():
             SELECT player_id,
                    GROUP_CONCAT(nickname, CHAR(10)) AS nicknames
               FROM (
-                    SELECT player_id, nickname
+                    SELECT player_id,
+                           nickname,
+                           MIN(valid_from) AS first_valid_from
                       FROM nickname_history
-                  ORDER BY valid_from
+                     GROUP BY player_id, nickname
+                     ORDER BY player_id, first_valid_from
               )
              GROUP BY player_id
         )
@@ -585,4 +589,3 @@ def api_attendance():
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=10290)
-
